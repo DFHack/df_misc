@@ -13,6 +13,8 @@ using namespace std;
 #include <dfhack/Export.h>
 #include <dfhack/PluginManager.h>
 #include <dfhack/modules/Maps.h>
+#include <dfhack/modules/Gui.h>
+#include <dfhack/extra/MapExtras.h>
 #include <dfhack/TileTypes.h>
 using namespace DFHack;
 
@@ -36,12 +38,12 @@ DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand>
     commands.clear();
 
     commands.push_back(PluginCommand("rb_load",
-                                     "Ruby interpreter. Loads the given ruby script.",
-                                     df_rubyload));
+                "Ruby interpreter. Loads the given ruby script.",
+                df_rubyload));
 
     commands.push_back(PluginCommand("rb_eval",
-                                     "Ruby interpreter. Eval() a ruby string.",
-                                     df_rubyeval));
+                "Ruby interpreter. Eval() a ruby string.",
+                df_rubyeval));
 
     return CR_OK;
 }
@@ -76,7 +78,10 @@ DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters
 
     rb_load_protect(rb_str_new2(parameters[0].c_str()), Qfalse, &state);
 
-    return state ? CR_FAILURE : CR_OK;
+    if (state)
+        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 6]", &state);
+
+    return CR_OK;
 }
 
 DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters)
@@ -91,41 +96,143 @@ DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters
     int state=0;
 
     for (int i=0 ; i<parameters.size() ; ++i) {
-	    full += parameters[i];
-	    full += " ";
+        full += parameters[i];
+        full += " ";
     }
 
     rb_eval_string_protect(full.c_str(), &state);
 
-    return state ? CR_FAILURE : CR_OK;
+    if (state)
+        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 6]", &state);
+
+    return CR_OK;
 }
 
 
-// master ruby class
+
+
 static VALUE rb_cDFHack;
+static VALUE rb_cCoord;
+
+static inline Core& getcore(void)
+{
+    return Core::getInstance();
+}
+
+static VALUE df_newcoord(int x, int y, int z)
+{
+    rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
+}
+
 
 static VALUE rb_dfsuspend(VALUE self)
 {
-	VALUE ret = Qtrue;
-	DFHack::Core::getInstance().Suspend();
-	if (rb_block_given_p() == Qtrue) {
-		ret = rb_yield(Qnil);
-		DFHack::Core::getInstance().Resume();
-	}
-	return ret;
+    VALUE ret = Qtrue;
+    getcore().Suspend();
+    if (rb_block_given_p() == Qtrue) {
+        ret = rb_yield(Qnil);
+        getcore().Resume();
+    }
+    return ret;
 }
 
 static VALUE rb_dfresume(VALUE self)
 {
-	DFHack::Core::getInstance().Resume();
-	return Qtrue;
+    getcore().Resume();
+    return Qtrue;
 }
+
+static VALUE rb_dfputs(VALUE self, VALUE args)
+{
+    Console &con = getcore().con;
+    VALUE s;
+
+    if (rb_ary_entry(args, 0) == Qnil)
+        con.print("\n");
+    else
+        while ((s = rb_ary_shift(args)) != Qnil)
+            con.print("%s\n", rb_string_value_ptr(&s));
+
+    return Qnil;
+}
+
+static VALUE rb_dfputs_err(VALUE self, VALUE args)
+{
+    Console &con = getcore().con;
+    VALUE s;
+
+    while ((s = rb_ary_shift(args)) != Qnil)
+        con.printerr("%s\n", rb_string_value_ptr(&s));
+
+    return Qnil;
+}
+
+
+static VALUE rb_guicursor(VALUE self)
+{
+    int x, y, z;
+    getcore().getGui()->getCursorCoords(x, y, z);
+    return df_newcoord(x, y, z);
+}
+
+static VALUE rb_guicursorset(VALUE self, VALUE x, VALUE y, VALUE z)
+{
+    getcore().getGui()->setCursorCoords(FIX2INT(x), FIX2INT(y), FIX2INT(z));
+    return Qtrue;
+}
+
+static VALUE rb_guiview(VALUE self)
+{
+    int x, y, z;
+    getcore().getGui()->getViewCoords(x, y, z);
+    return df_newcoord(x, y, z);
+}
+
+static VALUE rb_guiviewset(VALUE self, VALUE x, VALUE y, VALUE z)
+{
+    getcore().getGui()->setViewCoords(FIX2INT(x), FIX2INT(y), FIX2INT(z));
+    return Qtrue;
+}
+
 
 static void ruby_dfhack_bind(void) {
 
     rb_cDFHack = rb_define_class("DFHack", rb_cObject);
+    rb_cCoord = rb_eval_string(
+            "class DFHack::Coord\n"
+            " attr_accessor :x, :y, :z\n"
+            " def initialize(x, y, z)\n"
+            "  @x = x; @y = y; @z = z\n"
+            " end\n"
+            " self\n"
+            "end");
+
     rb_define_singleton_method(rb_cDFHack, "suspend", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
     rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
+    rb_define_singleton_method(rb_cDFHack, "puts", RUBY_METHOD_FUNC(rb_dfputs), -2);
+    rb_define_singleton_method(rb_cDFHack, "puts_err", RUBY_METHOD_FUNC(rb_dfputs_err), -2);
+    rb_define_singleton_method(rb_cDFHack, "cursor", RUBY_METHOD_FUNC(rb_guicursor), 0);
+    rb_define_singleton_method(rb_cDFHack, "cursor_set", RUBY_METHOD_FUNC(rb_guicursorset), 3);
+    rb_eval_string(
+            "def DFHack.cursor=(c)\n"
+            " case c\n"
+            " when Array; x, y, z = c\n"
+            " when DFHack::Coord; x, y, z = c.x, c.y, c.z\n"
+            " else; raise 'bad cursor coords'\n"
+            " end\n"
+            " cursor_set(x, y, z)\n"
+            "end");
+    rb_define_singleton_method(rb_cDFHack, "view", RUBY_METHOD_FUNC(rb_guiview), 0);
+    rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
+    rb_eval_string(
+            "def DFHack.view=(c)\n"
+            " case c\n"
+            " when Array; x, y, z = c\n"
+            " when DFHack::Coord; x, y, z = c.x, c.y, c.z\n"
+            " else; raise 'bad cursor coords'\n"
+            " end\n"
+            " view_set(x, y, z)\n"
+            "end");
 
     /*
     uint32_t x_max,y_max,z_max;
