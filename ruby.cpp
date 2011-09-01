@@ -21,6 +21,7 @@ using namespace DFHack;
 DFhackCExport command_result df_rubyinit (Core * c);
 DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters);
 DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters);
+static void ruby_dfhack_bind(void);
 
 DFhackCExport const char * plugin_name ( void )
 {
@@ -53,9 +54,78 @@ DFhackCExport command_result plugin_shutdown ( Core * c )
 
 DFhackCExport command_result df_rubyinit (Core * c)
 {
+    // initialize the ruby interpreter
     ruby_init();
     ruby_init_loadpath();
+    // default value for the $0 "current script name"
     ruby_script("dfhack");
+
+    // create the ruby objects to map DFHack to ruby methods
+    ruby_dfhack_bind();
+}
+
+DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters)
+{
+    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
+    {
+        c->con.print( "This command loads the ruby script whose path is given as parameter, and run it.\n");
+        return CR_OK;
+    }
+
+    int state=0;
+
+    rb_load_protect(rb_str_new2(parameters[0].c_str()), Qfalse, &state);
+
+    return state ? CR_FAILURE : CR_OK;
+}
+
+DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters)
+{
+    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
+    {
+        c->con.print("This command executes an arbitrary ruby statement.\n");
+        return CR_OK;
+    }
+
+    string full = "";
+    int state=0;
+
+    for (int i=0 ; i<parameters.size() ; ++i) {
+	    full += parameters[i];
+	    full += " ";
+    }
+
+    rb_eval_string_protect(full.c_str(), &state);
+
+    return state ? CR_FAILURE : CR_OK;
+}
+
+
+// master ruby class
+static VALUE rb_cDFHack;
+
+static VALUE rb_dfsuspend(VALUE self)
+{
+	VALUE ret = Qtrue;
+	DFHack::Core::getInstance().Suspend();
+	if (rb_block_given_p() == Qtrue) {
+		ret = rb_yield(Qnil);
+		DFHack::Core::getInstance().Resume();
+	}
+	return ret;
+}
+
+static VALUE rb_dfresume(VALUE self)
+{
+	DFHack::Core::getInstance().Resume();
+	return Qtrue;
+}
+
+static void ruby_dfhack_bind(void) {
+
+    rb_cDFHack = rb_define_class("DFHack", rb_cObject);
+    rb_define_singleton_method(rb_cDFHack, "suspend", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
+    rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
 
     /*
     uint32_t x_max,y_max,z_max;
@@ -164,37 +234,5 @@ DFhackCExport command_result df_rubyinit (Core * c)
     if(countbad)
         c->con.print("Fixed %d bad down ramps.\n",countbad);
     */
-    return CR_OK;
 }
 
-DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters)
-{
-    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
-    {
-        c->con.print( "This command loads the ruby script whose path is given as parameter, and run it.\n");
-        return CR_OK;
-    }
-    int state=0;
-    rb_load_protect(rb_str_new2(parameters[0].c_str()), Qfalse, &state);
-    return state ? CR_FAILURE : CR_OK;
-}
-
-DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters)
-{
-    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
-    {
-        c->con.print("This command executes an arbitrary ruby statement.\n");
-        return CR_OK;
-    }
-
-    string full = "";
-    int state=0;
-
-    for (int i=0 ; i<parameters.size() ; ++i) {
-	    full += parameters[i];
-	    full += " ";
-    }
-    c->con.print("eval('%s')\n", full.c_str());
-    rb_eval_string_protect(full.c_str(), &state);
-    return state ? CR_FAILURE : CR_OK;
-}
