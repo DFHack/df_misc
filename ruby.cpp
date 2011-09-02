@@ -1,5 +1,5 @@
 // foo
-// vim:sw=4:expandtab
+// vi:expandtab:sw=4
 
 #include <iostream>
 #include <vector>
@@ -110,9 +110,12 @@ DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters
 
 
 
-
+// helper functions
 static VALUE rb_cDFHack;
 static VALUE rb_cCoord;
+static VALUE rb_cMap;
+static VALUE rb_cMapBlock;
+
 
 static inline Core& getcore(void)
 {
@@ -124,22 +127,25 @@ static VALUE df_newcoord(int x, int y, int z)
     rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
 }
 
+// data_wrap_struct free() noop
+static void nop(void*) {}
+
+
+// DFHack methods
+static VALUE rb_dfresume(VALUE self)
+{
+    getcore().Resume();
+    return Qtrue;
+}
 
 static VALUE rb_dfsuspend(VALUE self)
 {
     VALUE ret = Qtrue;
     getcore().Suspend();
     if (rb_block_given_p() == Qtrue) {
-        ret = rb_yield(Qnil);
-        getcore().Resume();
+        ret = rb_ensure(RUBY_METHOD_FUNC(rb_yield), Qnil, RUBY_METHOD_FUNC(rb_dfresume), self);
     }
     return ret;
-}
-
-static VALUE rb_dfresume(VALUE self)
-{
-    getcore().Resume();
-    return Qtrue;
 }
 
 static VALUE rb_dfputs(VALUE self, VALUE args)
@@ -168,6 +174,8 @@ static VALUE rb_dfputs_err(VALUE self, VALUE args)
 }
 
 
+
+// Gui methods
 static VALUE rb_guicursor(VALUE self)
 {
     int x, y, z;
@@ -195,9 +203,132 @@ static VALUE rb_guiviewset(VALUE self, VALUE x, VALUE y, VALUE z)
 }
 
 
+
+// Maps methods
+static VALUE rb_mapnew(VALUE self)
+{
+    Maps *map = getcore().getMaps();
+    if (!map->Start())
+        rb_raise(rb_eRuntimeError, "map_start");
+    return Data_Wrap_Struct(rb_cMap, 0, nop, map);
+}
+
+static VALUE rb_mapstartfeat(VALUE self)
+{
+    Maps *map;
+    Data_Get_Struct(self, Maps, map);
+    if (!map->StartFeatures())
+        rb_raise(rb_eRuntimeError, "map_startfeatures");
+    return Qtrue;
+}
+
+static VALUE rb_mapstopfeat(VALUE self)
+{
+    Maps *map;
+    Data_Get_Struct(self, Maps, map);
+    if (!map->StopFeatures())
+        rb_raise(rb_eRuntimeError, "map_stopfeatures");
+    return Qtrue;
+}
+
+static VALUE rb_mapsize(VALUE self)
+{
+    Maps *map;
+    Data_Get_Struct(self, Maps, map);
+    uint32_t x, y, z;
+
+    map->getSize(x, y, z);
+
+    return df_newcoord(x, y, z);
+}
+
+static VALUE rb_mapblock(VALUE self, VALUE x, VALUE y, VALUE z)
+{
+    Maps *map;
+    Data_Get_Struct(self, Maps, map);
+    df_block *block;
+
+    block = map->getBlock(FIX2INT(x), FIX2INT(y), FIX2INT(z));
+    if (!block)
+        return Qnil;
+
+    return Data_Wrap_Struct(rb_cMapBlock, 0, nop, block);
+}
+
+
+
+
+static VALUE rb_blockread(VALUE self)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    return rb_str_new((char*)block, sizeof(*block));
+}
+
+static VALUE rb_blockwrite(VALUE self, VALUE rawdata)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+    char *ptr;
+
+    ptr = rb_string_value_ptr(&rawdata);
+
+    memcpy(block, ptr, sizeof(*block));
+
+    return Qtrue;
+}
+
+static VALUE rb_blockttype(VALUE self, VALUE x, VALUE y)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+    return INT2FIX(block->tiletype[x][y]);
+}
+
+static VALUE rb_blockttypeset(VALUE self, VALUE x, VALUE y, VALUE tt)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+    block->tiletype[x][y] = FIX2INT(tt);
+
+    return Qtrue;
+}
+
+static VALUE rb_blockdesign(VALUE self, VALUE x, VALUE y)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+    return INT2FIX(block->designation[x][y].whole);
+}
+
+static VALUE rb_blockdesignset(VALUE self, VALUE x, VALUE y, VALUE tt)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+    block->designation[x][y].whole = FIX2INT(tt);
+
+    return Qtrue;
+}
+
+
+
+// done
 static void ruby_dfhack_bind(void) {
 
-    rb_cDFHack = rb_define_class("DFHack", rb_cObject);
+    rb_cDFHack = rb_define_module("DFHack");
     rb_cCoord = rb_eval_string(
             "class DFHack::Coord\n"
             " attr_accessor :x, :y, :z\n"
@@ -211,8 +342,11 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
     rb_define_singleton_method(rb_cDFHack, "puts", RUBY_METHOD_FUNC(rb_dfputs), -2);
     rb_define_singleton_method(rb_cDFHack, "puts_err", RUBY_METHOD_FUNC(rb_dfputs_err), -2);
+
     rb_define_singleton_method(rb_cDFHack, "cursor", RUBY_METHOD_FUNC(rb_guicursor), 0);
     rb_define_singleton_method(rb_cDFHack, "cursor_set", RUBY_METHOD_FUNC(rb_guicursorset), 3);
+    rb_define_singleton_method(rb_cDFHack, "view", RUBY_METHOD_FUNC(rb_guiview), 0);
+    rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
     rb_eval_string(
             "def DFHack.cursor=(c)\n"
             " case c\n"
@@ -221,9 +355,8 @@ static void ruby_dfhack_bind(void) {
             " else; raise 'bad cursor coords'\n"
             " end\n"
             " cursor_set(x, y, z)\n"
-            "end");
-    rb_define_singleton_method(rb_cDFHack, "view", RUBY_METHOD_FUNC(rb_guiview), 0);
-    rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
+            "end"
+    );
     rb_eval_string(
             "def DFHack.view=(c)\n"
             " case c\n"
@@ -232,114 +365,22 @@ static void ruby_dfhack_bind(void) {
             " else; raise 'bad cursor coords'\n"
             " end\n"
             " view_set(x, y, z)\n"
-            "end");
+            "end"
+    );
 
-    /*
-    uint32_t x_max,y_max,z_max;
-    uint32_t num_blocks = 0;
-    uint32_t bytes_read = 0;
-    DFHack::designations40d designations;
-    DFHack::tiletypes40d tiles;
-    DFHack::tiletypes40d tilesAbove;
+    rb_cMap = rb_define_class_under(rb_cDFHack, "Map", rb_cObject);
+    rb_define_singleton_method(rb_cMap, "new", RUBY_METHOD_FUNC(rb_mapnew), 0);
+    rb_define_method(rb_cMap, "startfeatures", RUBY_METHOD_FUNC(rb_mapstartfeat), 0);
+    rb_define_method(rb_cMap, "stopfeatures", RUBY_METHOD_FUNC(rb_mapstopfeat), 0);
+    rb_define_method(rb_cMap, "size", RUBY_METHOD_FUNC(rb_mapsize), 0);         // size in 16x16 blocks
+    rb_define_method(rb_cMap, "block", RUBY_METHOD_FUNC(rb_mapblock), 3);
 
-    //DFHack::TileRow *ptile;
-    int32_t oldT, newT;
-
-    bool dirty= false;
-    int count=0;
-    int countbad=0;
-    c->Suspend();
-    DFHack::Maps *Mapz = c->getMaps();
-
-    // init the map
-    if (!Mapz->Start())
-    {
-        c->con.printerr("Can't init map.\n");
-        c->Resume();
-        return CR_FAILURE;
-    }
-
-    Mapz->getSize(x_max,y_max,z_max);
-
-    uint8_t zeroes [16][16] = {0};
-
-    // walk the map
-    for (uint32_t x = 0; x< x_max;x++)
-    {
-        for (uint32_t y = 0; y< y_max;y++)
-        {
-            for (uint32_t z = 0; z< z_max;z++)
-            {
-                if (Mapz->getBlock(x,y,z))
-                {
-                    dirty= false;
-                    Mapz->ReadDesignations(x,y,z, &designations);
-                    Mapz->ReadTileTypes(x,y,z, &tiles);
-                    if (Mapz->getBlock(x,y,z+1))
-                    {
-                        Mapz->ReadTileTypes(x,y,z+1, &tilesAbove);
-                    }
-                    else
-                    {
-                        memset(&tilesAbove,0,sizeof(tilesAbove));
-                    }
-
-                    for (uint32_t ty=0;ty<16;++ty)
-                    {
-                        for (uint32_t tx=0;tx<16;++tx)
-                        {
-                            //Only the remove ramp designation (ignore channel designation, etc)
-                            oldT = tiles[tx][ty];
-                            if ( DFHack::designation_default == designations[tx][ty].bits.dig
-                                    && DFHack::RAMP==DFHack::tileShape(oldT))
-                            {
-                                //Current tile is a ramp.
-                                //Set current tile, as accurately as can be expected
-                                newT = DFHack::findSimilarTileType(oldT,DFHack::FLOOR);
-
-                                //If no change, skip it (couldn't find a good tile type)
-                                if ( oldT == newT) continue;
-                                //Set new tile type, clear designation
-                                tiles[tx][ty] = newT;
-                                designations[tx][ty].bits.dig = DFHack::designation_no;
-
-                                //Check the tile above this one, in case a downward slope needs to be removed.
-                                if ( DFHack::RAMP_TOP == DFHack::tileShape(tilesAbove[tx][ty]) )
-                                {
-                                    tilesAbove[tx][ty] = 32;
-                                }
-                                dirty= true;
-                                ++count;
-                            }
-                            // ramp fixer
-                            else if(DFHack::RAMP!=DFHack::tileShape(oldT) && DFHack::RAMP_TOP == DFHack::tileShape(tilesAbove[tx][ty]))
-                            {
-                                tilesAbove[tx][ty] = 32;
-                                countbad++;
-                                dirty = true;
-                            }
-                        }
-                    }
-                    //If anything was changed, write it all.
-                    if (dirty)
-                    {
-                        Mapz->WriteDesignations(x,y,z, &designations);
-                        Mapz->WriteTileTypes(x,y,z, &tiles);
-                        if (Mapz->getBlock(x,y,z+1))
-                        {
-                            Mapz->WriteTileTypes(x,y,z+1, &tilesAbove);
-                        }
-                        dirty = false;
-                    }
-                }
-            }
-        }
-    }
-    c->Resume();
-    if(count)
-        c->con.print("Found and changed %d tiles.\n",count);
-    if(countbad)
-        c->con.print("Fixed %d bad down ramps.\n",countbad);
-    */
+    rb_cMapBlock = rb_define_class_under(rb_cMap, "Block", rb_cObject);
+    rb_define_method(rb_cMapBlock, "readraw", RUBY_METHOD_FUNC(rb_blockread), 0);
+    rb_define_method(rb_cMapBlock, "writeraw", RUBY_METHOD_FUNC(rb_blockwrite), 1);
+    rb_define_method(rb_cMapBlock, "tiletype", RUBY_METHOD_FUNC(rb_blockttype), 2);
+    rb_define_method(rb_cMapBlock, "tiletype=", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
+    rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
+    rb_define_method(rb_cMapBlock, "designation=", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
 }
 
