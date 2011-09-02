@@ -79,7 +79,7 @@ DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters
     rb_load_protect(rb_str_new2(parameters[0].c_str()), Qfalse, &state);
 
     if (state)
-        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 6]", &state);
+        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 8]", &state);
 
     return CR_OK;
 }
@@ -103,7 +103,7 @@ DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters
     rb_eval_string_protect(full.c_str(), &state);
 
     if (state)
-        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 6]", &state);
+        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 8]", &state);
 
     return CR_OK;
 }
@@ -126,9 +126,6 @@ static VALUE df_newcoord(int x, int y, int z)
 {
     rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
 }
-
-// data_wrap_struct free() noop
-static void nop(void*) {}
 
 
 // DFHack methods
@@ -210,7 +207,7 @@ static VALUE rb_mapnew(VALUE self)
     Maps *map = getcore().getMaps();
     if (!map->Start())
         rb_raise(rb_eRuntimeError, "map_start");
-    return Data_Wrap_Struct(rb_cMap, 0, nop, map);
+    return Data_Wrap_Struct(rb_cMap, 0, 0, map);
 }
 
 static VALUE rb_mapstartfeat(VALUE self)
@@ -252,7 +249,7 @@ static VALUE rb_mapblock(VALUE self, VALUE x, VALUE y, VALUE z)
     if (!block)
         return Qnil;
 
-    return Data_Wrap_Struct(rb_cMapBlock, 0, nop, block);
+    return Data_Wrap_Struct(rb_cMapBlock, 0, 0, block);
 }
 
 
@@ -379,8 +376,8 @@ static void ruby_dfhack_bind(void) {
     rb_define_method(rb_cMapBlock, "readraw", RUBY_METHOD_FUNC(rb_blockread), 0);
     rb_define_method(rb_cMapBlock, "writeraw", RUBY_METHOD_FUNC(rb_blockwrite), 1);
     rb_define_method(rb_cMapBlock, "tiletype", RUBY_METHOD_FUNC(rb_blockttype), 2);
-    rb_define_method(rb_cMapBlock, "tiletype=", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
+    rb_define_method(rb_cMapBlock, "tiletype_set", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
     rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
-    rb_define_method(rb_cMapBlock, "designation=", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
+    rb_define_method(rb_cMapBlock, "designation_set", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
 }
 
