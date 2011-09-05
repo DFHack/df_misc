@@ -66,6 +66,26 @@ DFhackCExport command_result df_rubyinit (Core * c)
     ruby_dfhack_bind();
 }
 
+static void dump_rb_error(void)
+{
+    Console &con = Core::getInstance().con;
+    VALUE s, err;
+
+    err = rb_gv_get("$!");
+
+    s = rb_funcall(err, rb_intern("class"), 0);
+    s = rb_funcall(s, rb_intern("name"), 0);
+    con.printerr("E: %s: ", rb_string_value_ptr(&s));
+
+    s = rb_funcall(err, rb_intern("message"), 0);
+    con.printerr("%s\n", rb_string_value_ptr(&s));
+
+    err = rb_funcall(err, rb_intern("backtrace"), 0);
+    for (int i=0 ; i<8 ; ++i)
+        if ((s = rb_ary_shift(err)) != Qnil)
+            con.printerr(" %s\n", rb_string_value_ptr(&s));
+}
+
 DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters)
 {
     if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
@@ -79,7 +99,7 @@ DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters
     rb_load_protect(rb_str_new2(parameters[0].c_str()), Qfalse, &state);
 
     if (state)
-        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 8]", &state);
+        dump_rb_error();
 
     return CR_OK;
 }
@@ -103,7 +123,7 @@ DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters
     rb_eval_string_protect(full.c_str(), &state);
 
     if (state)
-        rb_eval_string_protect("DFHack.puts_err \"#{$!.class}: #{$!.message}\", *$!.backtrace[0, 8]", &state);
+        dump_rb_error();
 
     return CR_OK;
 }
@@ -170,6 +190,40 @@ static VALUE rb_dfputs_err(VALUE self, VALUE args)
     return Qnil;
 }
 
+// raw memory access
+// WARNING: may cause game crash ! double-check your addresses !
+static VALUE rb_dfmemread(VALUE self, VALUE addr, VALUE len)
+{
+    return rb_str_new((char*)rb_uint2inum(addr), rb_uint2inum(len));
+}
+
+static VALUE rb_dfmemwrite(VALUE self, VALUE addr, VALUE raw)
+{
+    // no stable api for raw.length between rb1.8/rb1.9 ...
+    int strlen = FIX2INT(rb_funcall(raw, rb_intern("length"), 0));
+
+    memcpy((void*)rb_num2ulong(addr), rb_string_value_ptr(&raw), strlen);
+
+    return Qtrue;
+}
+
+
+/* XXX this needs a custom DFHack::Plugin subclass to pass the cmdname to invoke(), to match the ruby callback
+// register a ruby method as dfhack console command
+// usage: DFHack.register("moo", "this commands prints moo on the console") { DFHack.puts "moo !" }
+static VALUE rb_dfregister(VALUE self, VALUE name, VALUE descr)
+{
+    commands.push_back(PluginCommand(rb_string_value_ptr(&name),
+                rb_string_value_ptr(&descr),
+                df_rubycustom));
+
+    return Qtrue;
+}
+*/
+static VALUE rb_dfregister(VALUE self, VALUE name, VALUE descr)
+{
+    rb_raise(rb_eRuntimeError, "not implemented");
+}
 
 
 // Gui methods
@@ -252,30 +306,44 @@ static VALUE rb_mapblock(VALUE self, VALUE x, VALUE y, VALUE z)
     return Data_Wrap_Struct(rb_cMapBlock, 0, 0, block);
 }
 
+static VALUE rb_mapveins(VALUE self, VALUE x, VALUE y, VALUE z)
+{
+    Maps *map;
+    VALUE ret;
+    std::vector <DFHack::t_vein *> veins;
+
+    Data_Get_Struct(self, Maps, map);
+    
+    map->SortBlockEvents(FIX2INT(x), FIX2INT(y), FIX2INT(z), &veins);
+
+    // return an array of [vein type (uint32), vein bitmap (string of 16*16bits = 32chars)
+    ret = rb_ary_new();
+
+    for (int i=0 ; i<veins.size() ; ++i) {
+        VALUE elem = rb_ary_new();
+
+        rb_ary_push(elem, rb_uint2inum(veins[i]->type));
+        rb_ary_push(elem, rb_str_new((char*)veins[i]->assignment, 32));
+
+        rb_ary_push(ret, elem);
+    }
+
+    return ret;
+}
 
 
 
-static VALUE rb_blockread(VALUE self)
+
+// return the address of the block in DF memory (for raw memread/write)
+static VALUE rb_blockaddr(VALUE self)
 {
     df_block *block;
     Data_Get_Struct(self, df_block, block);
 
-    return rb_str_new((char*)block, sizeof(*block));
+    return rb_uint2inum((uint32_t)block);
 }
 
-static VALUE rb_blockwrite(VALUE self, VALUE rawdata)
-{
-    df_block *block;
-    Data_Get_Struct(self, df_block, block);
-    char *ptr;
-
-    ptr = rb_string_value_ptr(&rawdata);
-
-    memcpy(block, ptr, sizeof(*block));
-
-    return Qtrue;
-}
-
+// change tile type of tile (x%16, y%16) (uint16)
 static VALUE rb_blockttype(VALUE self, VALUE x, VALUE y)
 {
     df_block *block;
@@ -298,6 +366,16 @@ static VALUE rb_blockttypeset(VALUE self, VALUE x, VALUE y, VALUE tt)
     return Qtrue;
 }
 
+// change designation of tile (x%16, y%16) (uint32)
+/* 0000_0007 water level
+   0000_0070 designated job for the tile
+    0none 1dig 2updownstair 3channel 4ramp 5downstair 6upstair 7?
+   0000_0180 flag job? 8smooth 10engrave
+   0000_0200 visible (discovered)
+   0001_c000 10outside 8light 4subterranean
+   0020_0000 magma/lava (in/outdoor)
+   1000_0000 'mossy'
+ */
 static VALUE rb_blockdesign(VALUE self, VALUE x, VALUE y)
 {
     df_block *block;
@@ -305,7 +383,7 @@ static VALUE rb_blockdesign(VALUE self, VALUE x, VALUE y)
 
     x = FIX2INT(x) & 15;
     y = FIX2INT(y) & 15;
-    return INT2FIX(block->designation[x][y].whole);
+    return rb_uint2inum(block->designation[x][y].whole);
 }
 
 static VALUE rb_blockdesignset(VALUE self, VALUE x, VALUE y, VALUE tt)
@@ -315,7 +393,26 @@ static VALUE rb_blockdesignset(VALUE self, VALUE x, VALUE y, VALUE tt)
 
     x = FIX2INT(x) & 15;
     y = FIX2INT(y) & 15;
-    block->designation[x][y].whole = FIX2INT(tt);
+    block->designation[x][y].whole = rb_num2ulong(tt);
+
+    return Qtrue;
+}
+
+// block-wide flags (1 -> check for dig designation)
+static VALUE rb_blockflags(VALUE self)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    return rb_uint2inum(block->flags);
+}
+
+static VALUE rb_blockflagsset(VALUE self, VALUE tt)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    block->flags = rb_num2ulong(tt);
 
     return Qtrue;
 }
@@ -326,19 +423,14 @@ static VALUE rb_blockdesignset(VALUE self, VALUE x, VALUE y, VALUE tt)
 static void ruby_dfhack_bind(void) {
 
     rb_cDFHack = rb_define_module("DFHack");
-    rb_cCoord = rb_eval_string(
-            "class DFHack::Coord\n"
-            " attr_accessor :x, :y, :z\n"
-            " def initialize(x, y, z)\n"
-            "  @x = x; @y = y; @z = z\n"
-            " end\n"
-            " self\n"
-            "end");
 
     rb_define_singleton_method(rb_cDFHack, "suspend", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
     rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
     rb_define_singleton_method(rb_cDFHack, "puts", RUBY_METHOD_FUNC(rb_dfputs), -2);
     rb_define_singleton_method(rb_cDFHack, "puts_err", RUBY_METHOD_FUNC(rb_dfputs_err), -2);
+    rb_define_singleton_method(rb_cDFHack, "memread", RUBY_METHOD_FUNC(rb_dfmemread), 2);
+    rb_define_singleton_method(rb_cDFHack, "memwrite", RUBY_METHOD_FUNC(rb_dfmemwrite), 2);
+    rb_define_singleton_method(rb_cDFHack, "register_dfcommand", RUBY_METHOD_FUNC(rb_dfregister), 2);
 
     rb_define_singleton_method(rb_cDFHack, "cursor", RUBY_METHOD_FUNC(rb_guicursor), 0);
     rb_define_singleton_method(rb_cDFHack, "cursor_set", RUBY_METHOD_FUNC(rb_guicursorset), 3);
@@ -365,19 +457,30 @@ static void ruby_dfhack_bind(void) {
             "end"
     );
 
+    rb_cCoord = rb_define_class_under(rb_cDFHack, "Coord", rb_cObject);
+    rb_eval_string(
+            "class DFHack::Coord\n"
+            " attr_accessor :x, :y, :z\n"
+            " def initialize(x, y, z)\n"
+            "  @x = x; @y = y; @z = z\n"
+            " end\n"
+            "end");
+
     rb_cMap = rb_define_class_under(rb_cDFHack, "Map", rb_cObject);
     rb_define_singleton_method(rb_cMap, "new", RUBY_METHOD_FUNC(rb_mapnew), 0);
     rb_define_method(rb_cMap, "startfeatures", RUBY_METHOD_FUNC(rb_mapstartfeat), 0);
     rb_define_method(rb_cMap, "stopfeatures", RUBY_METHOD_FUNC(rb_mapstopfeat), 0);
     rb_define_method(rb_cMap, "size", RUBY_METHOD_FUNC(rb_mapsize), 0);         // size in 16x16 blocks
     rb_define_method(rb_cMap, "block", RUBY_METHOD_FUNC(rb_mapblock), 3);
+    rb_define_method(rb_cMap, "veins", RUBY_METHOD_FUNC(rb_mapveins), 3);
 
     rb_cMapBlock = rb_define_class_under(rb_cMap, "Block", rb_cObject);
-    rb_define_method(rb_cMapBlock, "readraw", RUBY_METHOD_FUNC(rb_blockread), 0);
-    rb_define_method(rb_cMapBlock, "writeraw", RUBY_METHOD_FUNC(rb_blockwrite), 1);
+    rb_define_method(rb_cMapBlock, "memaddr", RUBY_METHOD_FUNC(rb_blockaddr), 0);
     rb_define_method(rb_cMapBlock, "tiletype", RUBY_METHOD_FUNC(rb_blockttype), 2);
     rb_define_method(rb_cMapBlock, "tiletype_set", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
     rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
     rb_define_method(rb_cMapBlock, "designation_set", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
+    rb_define_method(rb_cMapBlock, "flags", RUBY_METHOD_FUNC(rb_blockflags), 0);
+    rb_define_method(rb_cMapBlock, "flags=", RUBY_METHOD_FUNC(rb_blockflagsset), 1);
 }
 
