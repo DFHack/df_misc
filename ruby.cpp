@@ -141,9 +141,8 @@ static command_result df_rubyeval(Core * c, vector <string> & parameters)
     }
 
     string full = "";
-    int state=0;
 
-    for (int i=0 ; i<parameters.size() ; ++i) {
+    for (unsigned i=0 ; i<parameters.size() ; ++i) {
         full += parameters[i];
         full += " ";
     }
@@ -164,7 +163,7 @@ static command_result df_rubyeval(Core * c, vector <string> & parameters)
     m_irun->lock();
     m_mutex->unlock();
 
-    return CR_OK;
+    return ret;
 }
 
 
@@ -213,6 +212,7 @@ static void df_rubythread(void *p)
 
         switch (r_type) {
         case RB_IDLE:
+        case RB_INIT:
             break;
 
         case RB_DIE:
@@ -260,7 +260,7 @@ static inline Core& getcore(void)
 
 static VALUE df_newcoord(int x, int y, int z)
 {
-    rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
+    return rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
 }
 
 
@@ -435,7 +435,7 @@ static VALUE rb_mapveins(VALUE self, VALUE x, VALUE y, VALUE z)
     // return an array of [vein type (uint32), vein bitmap (string of 16*16bits = 32chars)
     ret = rb_ary_new();
 
-    for (int i=0 ; i<veins.size() ; ++i) {
+    for (unsigned i=0 ; i<veins.size() ; ++i) {
         VALUE elem = rb_ary_new();
 
         rb_ary_push(elem, rb_uint2inum(veins[i]->type));
