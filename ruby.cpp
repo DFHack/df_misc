@@ -17,13 +17,31 @@ using namespace std;
 #include <dfhack/extra/MapExtras.h>
 #include <dfhack/TileTypes.h>
 using namespace DFHack;
+#include "tinythread.h"
+using namespace tthread;
 
 #include <ruby.h>
 
-DFhackCExport command_result df_rubyinit (Core * c);
-DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters);
-DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters);
+static void df_rubythread(void*);
+static command_result df_rubyload (Core * c, vector <string> & parameters);
+static command_result df_rubyeval (Core * c, vector <string> & parameters);
 static void ruby_dfhack_bind(void);
+
+enum RB_command {
+    RB_IDLE,
+    RB_INIT,
+    RB_DIE,
+    RB_LOAD,
+    RB_EVAL,
+    RB_CUSTOM,
+};
+
+mutex *m_irun;
+mutex *m_mutex;
+static RB_command r_type;
+static const char *r_command;
+static command_result r_result;
+static thread *r_thread;
 
 DFhackCExport const char * plugin_name ( void )
 {
@@ -32,7 +50,18 @@ DFhackCExport const char * plugin_name ( void )
 
 DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand> &commands)
 {
-    if (df_rubyinit(c) == CR_FAILURE)
+    m_irun = new mutex();
+    m_mutex = new mutex();
+    r_type = RB_INIT;
+
+    r_thread = new thread(df_rubythread, 0);
+
+    while (r_type != RB_IDLE)
+	    this_thread::yield();
+
+    m_irun->lock();
+
+    if (r_result == CR_FAILURE)
         return CR_FAILURE;
 
     commands.clear();
@@ -50,21 +79,96 @@ DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand>
 
 DFhackCExport command_result plugin_shutdown ( Core * c )
 {
-    ruby_finalize();
+    m_mutex->lock();
+    if (!r_thread)
+        return CR_OK;
+
+    r_type = RB_DIE;
+    r_command = 0;
+    m_irun->unlock();
+
+    r_thread->join();
+
+    delete r_thread;
+    r_thread = 0;
+    delete m_irun;
+    m_mutex->unlock();
+    delete m_mutex;
+
     return CR_OK;
 }
 
-DFhackCExport command_result df_rubyinit (Core * c)
+static command_result df_rubyload(Core * c, vector <string> & parameters)
 {
-    // initialize the ruby interpreter
-    ruby_init();
-    ruby_init_loadpath();
-    // default value for the $0 "current script name"
-    ruby_script("dfhack");
+    command_result ret;
 
-    // create the ruby objects to map DFHack to ruby methods
-    ruby_dfhack_bind();
+    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
+    {
+        c->con.print("This command loads the ruby script whose path is given as parameter, and run it.\n");
+        return CR_OK;
+    }
+
+    // serialize 'accesses' to the ruby thread
+    m_mutex->lock();
+    if (!r_thread)
+        // raced with plugin_shutdown ?
+        return CR_OK;
+
+    r_type = RB_LOAD;
+    r_command = parameters[0].c_str();
+    m_irun->unlock();
+
+    // could use a condition_variable or something...
+    while (r_type != RB_IDLE)
+	    this_thread::yield();
+    // XXX non-atomic with previous r_type change check
+    ret = r_result;
+
+    m_irun->lock();
+    m_mutex->unlock();
+
+    return ret;
 }
+
+static command_result df_rubyeval(Core * c, vector <string> & parameters)
+{
+    command_result ret;
+
+    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
+    {
+        c->con.print("This command executes an arbitrary ruby statement.\n");
+        return CR_OK;
+    }
+
+    string full = "";
+    int state=0;
+
+    for (int i=0 ; i<parameters.size() ; ++i) {
+        full += parameters[i];
+        full += " ";
+    }
+
+    m_mutex->lock();
+    if (!r_thread)
+        return CR_OK;
+
+    r_type = RB_EVAL;
+    r_command = full.c_str();
+    m_irun->unlock();
+
+    while (r_type != RB_IDLE)
+	    this_thread::yield();
+
+    ret = r_result;
+
+    m_irun->lock();
+    m_mutex->unlock();
+
+    return CR_OK;
+}
+
+
+
 
 static void dump_rb_error(void)
 {
@@ -86,49 +190,61 @@ static void dump_rb_error(void)
             con.printerr(" %s\n", rb_string_value_ptr(&s));
 }
 
-DFhackCExport command_result df_rubyload (Core * c, vector <string> & parameters)
+static void df_rubythread(void *p)
 {
-    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
-    {
-        c->con.print( "This command loads the ruby script whose path is given as parameter, and run it.\n");
-        return CR_OK;
+    int state, running;
+
+    // initialize the ruby interpreter
+    ruby_init();
+    ruby_init_loadpath();
+    // default value for the $0 "current script name"
+    ruby_script("dfhack");
+
+    // create the ruby objects to map DFHack to ruby methods
+    ruby_dfhack_bind();
+
+    r_result = CR_OK;
+    r_type = RB_IDLE;
+
+    running = 1;
+    while (running) {
+        // wait for new command
+        m_irun->lock();
+
+        switch (r_type) {
+        case RB_IDLE:
+            break;
+
+        case RB_DIE:
+            running = 0;
+            ruby_finalize();
+            break;
+
+        case RB_LOAD:
+            state = 0;
+            rb_load_protect(rb_str_new2(r_command), Qfalse, &state);
+            if (state)
+                dump_rb_error();
+            break;
+
+        case RB_EVAL:
+            state = 0;
+            rb_eval_string_protect(r_command, &state);
+            if (state)
+                dump_rb_error();
+            break;
+
+        case RB_CUSTOM:
+            // TODO handle ruby custom commands
+            break;
+        }
+
+        r_result = CR_OK;
+        r_type = RB_IDLE;
+        m_irun->unlock();
+        this_thread::yield();
     }
-
-    int state=0;
-
-    rb_load_protect(rb_str_new2(parameters[0].c_str()), Qfalse, &state);
-
-    if (state)
-        dump_rb_error();
-
-    return CR_OK;
 }
-
-DFhackCExport command_result df_rubyeval (Core * c, vector <string> & parameters)
-{
-    if (parameters.size() == 1 && (parameters[0] == "help" || parameters[0] == "?"))
-    {
-        c->con.print("This command executes an arbitrary ruby statement.\n");
-        return CR_OK;
-    }
-
-    string full = "";
-    int state=0;
-
-    for (int i=0 ; i<parameters.size() ; ++i) {
-        full += parameters[i];
-        full += " ";
-    }
-
-    rb_eval_string_protect(full.c_str(), &state);
-
-    if (state)
-        dump_rb_error();
-
-    return CR_OK;
-}
-
-
 
 // helper functions
 static VALUE rb_cDFHack;
