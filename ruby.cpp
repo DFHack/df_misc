@@ -273,36 +273,21 @@ static VALUE rb_dfresume(VALUE self)
 
 static VALUE rb_dfsuspend(VALUE self)
 {
-    VALUE ret = Qtrue;
     getcore().Suspend();
-    if (rb_block_given_p() == Qtrue) {
-        ret = rb_ensure(RUBY_METHOD_FUNC(rb_yield), Qnil, RUBY_METHOD_FUNC(rb_dfresume), self);
-    }
-    return ret;
+    return Qtrue;
 }
 
-static VALUE rb_dfputs(VALUE self, VALUE args)
+static VALUE rb_dfprint_str(VALUE self, VALUE s)
 {
     Console &con = getcore().con;
-    VALUE s;
-
-    if (rb_ary_entry(args, 0) == Qnil)
-        con.print("\n");
-    else
-        while ((s = rb_ary_shift(args)) != Qnil)
-            con.print("%s\n", rb_string_value_ptr(&s));
-
+    con.print("%s", rb_string_value_ptr(&s));
     return Qnil;
 }
 
-static VALUE rb_dfputs_err(VALUE self, VALUE args)
+static VALUE rb_dfprint_err(VALUE self, VALUE s)
 {
     Console &con = getcore().con;
-    VALUE s;
-
-    while ((s = rb_ary_shift(args)) != Qnil)
-        con.printerr("%s\n", rb_string_value_ptr(&s));
-
+    con.printerr("%s", rb_string_value_ptr(&s));
     return Qnil;
 }
 
@@ -514,6 +499,25 @@ static VALUE rb_blockdesignset(VALUE self, VALUE x, VALUE y, VALUE tt)
     return Qtrue;
 }
 
+// returns the raw block designation chunk
+static VALUE rb_blockdesignmap(VALUE self)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    return rb_str_new((char*)block->designation, 16*16*sizeof(**block->designation));
+}
+
+static VALUE rb_blockdesignmapset(VALUE self, VALUE raw)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    memcpy(block->designation, rb_string_value_ptr(&raw), 16*16*sizeof(**block->designation));
+
+    return Qtrue;
+}
+
 // block-wide flags (1 -> check for dig designation)
 static VALUE rb_blockflags(VALUE self)
 {
@@ -537,13 +541,12 @@ static VALUE rb_blockflagsset(VALUE self, VALUE tt)
 
 // done
 static void ruby_dfhack_bind(void) {
-
     rb_cDFHack = rb_define_module("DFHack");
 
-    rb_define_singleton_method(rb_cDFHack, "suspend", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
+    rb_define_singleton_method(rb_cDFHack, "suspendraw", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
     rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
-    rb_define_singleton_method(rb_cDFHack, "puts", RUBY_METHOD_FUNC(rb_dfputs), -2);
-    rb_define_singleton_method(rb_cDFHack, "puts_err", RUBY_METHOD_FUNC(rb_dfputs_err), -2);
+    rb_define_singleton_method(rb_cDFHack, "print_str", RUBY_METHOD_FUNC(rb_dfprint_str), 1);
+    rb_define_singleton_method(rb_cDFHack, "print_err", RUBY_METHOD_FUNC(rb_dfprint_err), 1);
     rb_define_singleton_method(rb_cDFHack, "memread", RUBY_METHOD_FUNC(rb_dfmemread), 2);
     rb_define_singleton_method(rb_cDFHack, "memwrite", RUBY_METHOD_FUNC(rb_dfmemwrite), 2);
     rb_define_singleton_method(rb_cDFHack, "register_dfcommand", RUBY_METHOD_FUNC(rb_dfregister), 2);
@@ -552,35 +555,7 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "cursor_set", RUBY_METHOD_FUNC(rb_guicursorset), 3);
     rb_define_singleton_method(rb_cDFHack, "view", RUBY_METHOD_FUNC(rb_guiview), 0);
     rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
-    rb_eval_string(
-            "def DFHack.cursor=(c)\n"
-            " case c\n"
-            " when Array; x, y, z = c\n"
-            " when DFHack::Coord; x, y, z = c.x, c.y, c.z\n"
-            " else; raise 'bad cursor coords'\n"
-            " end\n"
-            " cursor_set(x, y, z)\n"
-            "end"
-    );
-    rb_eval_string(
-            "def DFHack.view=(c)\n"
-            " case c\n"
-            " when Array; x, y, z = c\n"
-            " when DFHack::Coord; x, y, z = c.x, c.y, c.z\n"
-            " else; raise 'bad cursor coords'\n"
-            " end\n"
-            " view_set(x, y, z)\n"
-            "end"
-    );
-
     rb_cCoord = rb_define_class_under(rb_cDFHack, "Coord", rb_cObject);
-    rb_eval_string(
-            "class DFHack::Coord\n"
-            " attr_accessor :x, :y, :z\n"
-            " def initialize(x, y, z)\n"
-            "  @x = x; @y = y; @z = z\n"
-            " end\n"
-            "end");
 
     rb_cMap = rb_define_class_under(rb_cDFHack, "Map", rb_cObject);
     rb_define_singleton_method(rb_cMap, "new", RUBY_METHOD_FUNC(rb_mapnew), 0);
@@ -596,7 +571,13 @@ static void ruby_dfhack_bind(void) {
     rb_define_method(rb_cMapBlock, "tiletype_set", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
     rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
     rb_define_method(rb_cMapBlock, "designation_set", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
+    rb_define_method(rb_cMapBlock, "designationmap", RUBY_METHOD_FUNC(rb_blockdesignmap), 0);
+    rb_define_method(rb_cMapBlock, "designationmap=", RUBY_METHOD_FUNC(rb_blockdesignmapset), 1);
     rb_define_method(rb_cMapBlock, "flags", RUBY_METHOD_FUNC(rb_blockflags), 0);
     rb_define_method(rb_cMapBlock, "flags=", RUBY_METHOD_FUNC(rb_blockflagsset), 1);
-}
 
+    int state=0;
+    rb_load_protect(rb_str_new2("./hack/plugins/ruby.rb"), Qfalse, &state);
+    if (state)
+        dump_rb_error();
+}
