@@ -12,6 +12,7 @@ using namespace std;
 #include <dfhack/Console.h>
 #include <dfhack/Export.h>
 #include <dfhack/PluginManager.h>
+#include <dfhack/VersionInfo.h>
 #include <dfhack/modules/Maps.h>
 #include <dfhack/modules/Gui.h>
 #include <dfhack/extra/MapExtras.h>
@@ -305,6 +306,11 @@ static VALUE rb_dfsuspend(VALUE self)
     return Qtrue;
 }
 
+static VALUE rb_dfgetversion(VALUE self)
+{
+    return rb_str_new2(getcore().vinfo->getVersion().c_str());
+}
+
 static VALUE rb_dfprint_str(VALUE self, VALUE s)
 {
     Console &con = getcore().con;
@@ -592,6 +598,7 @@ static void ruby_dfhack_bind(void) {
 
     rb_define_singleton_method(rb_cDFHack, "suspendraw", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
     rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
+    rb_define_singleton_method(rb_cDFHack, "version", RUBY_METHOD_FUNC(rb_dfgetversion), 0);
     rb_define_singleton_method(rb_cDFHack, "print_str", RUBY_METHOD_FUNC(rb_dfprint_str), 1);
     rb_define_singleton_method(rb_cDFHack, "print_err", RUBY_METHOD_FUNC(rb_dfprint_err), 1);
     rb_define_singleton_method(rb_cDFHack, "memread", RUBY_METHOD_FUNC(rb_dfmemread), 2);
