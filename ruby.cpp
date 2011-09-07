@@ -249,8 +249,10 @@ static void df_rubythread(void *p)
 // helper functions
 static VALUE rb_cDFHack;
 static VALUE rb_cCoord;
+static VALUE rb_cWrapData;
 static VALUE rb_cMap;
 static VALUE rb_cMapBlock;
+static VALUE rb_cPlant;
 
 
 static inline Core& getcore(void)
@@ -262,6 +264,32 @@ static VALUE df_newcoord(int x, int y, int z)
 {
     return rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
 }
+
+#define NUMERIC_ACCESSOR(funcname, type, fieldname) \
+    static VALUE rb_ ## funcname (VALUE self) { \
+        type *var; \
+        Data_Get_Struct(self, type, var); \
+        return rb_uint2inum(var->fieldname); \
+    } \
+    static VALUE rb_ ## funcname ## set (VALUE self, VALUE val) { \
+        type *var; \
+        Data_Get_Struct(self, type, var); \
+        var->fieldname = rb_num2ulong(val); \
+        return Qtrue; \
+    }
+
+#define FLAG_ACCESSOR(funcname, type, fieldname) \
+    static VALUE rb_ ## funcname (VALUE self) { \
+        type *var; \
+        Data_Get_Struct(self, type, var); \
+        return (var->fieldname ? Qtrue : Qfalse); \
+    } \
+    static VALUE rb_ ## funcname ## set (VALUE self, VALUE val) { \
+        type *var; \
+        Data_Get_Struct(self, type, var); \
+        var->fieldname = ((val == Qtrue || val == INT2FIX(1)) ? 1 : 0); \
+        return Qtrue; \
+    }
 
 
 // DFHack methods
@@ -354,6 +382,18 @@ static VALUE rb_guiviewset(VALUE self, VALUE x, VALUE y, VALUE z)
     return Qtrue;
 }
 
+static VALUE rb_dfvegetation(VALUE self)
+{
+    DFHack::Vegetation *veg = getcore().getVegetation();
+    if (!veg->all_plants)
+        return Qnil;
+
+    VALUE ret = rb_ary_new();
+    for (unsigned i=0 ; i<veg->all_plants->size() ; ++i)
+        rb_ary_push(ret, Data_Wrap_Struct(rb_cPlant, 0, 0, veg->all_plants->at(i)));
+
+    return ret;
+}
 
 
 // Maps methods
@@ -435,14 +475,15 @@ static VALUE rb_mapveins(VALUE self, VALUE x, VALUE y, VALUE z)
 
 
 
-// return the address of the block in DF memory (for raw memread/write)
-static VALUE rb_blockaddr(VALUE self)
+// return the address of the struct in DF memory (for raw memread/write)
+static VALUE rb_memaddr(VALUE self)
 {
-    df_block *block;
-    Data_Get_Struct(self, df_block, block);
+    void *data;
+    Data_Get_Struct(self, void, data);
 
-    return rb_uint2inum((uint32_t)block);
+    return rb_uint2inum((uint32_t)data);
 }
+
 
 // change tile type of tile (x%16, y%16) (uint16)
 static VALUE rb_blockttype(VALUE self, VALUE x, VALUE y)
@@ -518,24 +559,30 @@ static VALUE rb_blockdesignmapset(VALUE self, VALUE raw)
     return Qtrue;
 }
 
-// block-wide flags (1 -> check for dig designation)
-static VALUE rb_blockflags(VALUE self)
-{
-    df_block *block;
-    Data_Get_Struct(self, df_block, block);
+NUMERIC_ACCESSOR(blockflags, df_block, flags)
 
-    return rb_uint2inum(block->flags);
+
+
+
+// Vegetation
+NUMERIC_ACCESSOR(plantmaterial, df_plant, material)
+
+static VALUE rb_plantpos(VALUE self)
+{
+    df_plant *plant;
+    Data_Get_Struct(self, df_plant, plant);
+
+    return df_newcoord(plant->x, plant->y, plant->z);
 }
 
-static VALUE rb_blockflagsset(VALUE self, VALUE tt)
-{
-    df_block *block;
-    Data_Get_Struct(self, df_block, block);
+FLAG_ACCESSOR(plantisshrub, df_plant, is_shrub)
 
-    block->flags = rb_num2ulong(tt);
+FLAG_ACCESSOR(plantisburning, df_plant, is_burning)
 
-    return Qtrue;
-}
+NUMERIC_ACCESSOR(plantgrowcounter, df_plant, grow_counter)
+
+NUMERIC_ACCESSOR(planthitpoints, df_plant, hitpoints)
+
 
 
 
@@ -555,9 +602,14 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "cursor_set", RUBY_METHOD_FUNC(rb_guicursorset), 3);
     rb_define_singleton_method(rb_cDFHack, "view", RUBY_METHOD_FUNC(rb_guiview), 0);
     rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
+    rb_define_singleton_method(rb_cDFHack, "vegetation", RUBY_METHOD_FUNC(rb_dfvegetation), 0);
+
     rb_cCoord = rb_define_class_under(rb_cDFHack, "Coord", rb_cObject);
 
-    rb_cMap = rb_define_class_under(rb_cDFHack, "Map", rb_cObject);
+    rb_cWrapData = rb_define_class_under(rb_cDFHack, "WrapData", rb_cObject);
+    rb_define_method(rb_cWrapData, "memaddr", RUBY_METHOD_FUNC(rb_memaddr), 0);
+
+    rb_cMap = rb_define_class_under(rb_cDFHack, "Map", rb_cWrapData);
     rb_define_singleton_method(rb_cMap, "new", RUBY_METHOD_FUNC(rb_mapnew), 0);
     rb_define_method(rb_cMap, "startfeatures", RUBY_METHOD_FUNC(rb_mapstartfeat), 0);
     rb_define_method(rb_cMap, "stopfeatures", RUBY_METHOD_FUNC(rb_mapstopfeat), 0);
@@ -565,8 +617,7 @@ static void ruby_dfhack_bind(void) {
     rb_define_method(rb_cMap, "block", RUBY_METHOD_FUNC(rb_mapblock), 3);
     rb_define_method(rb_cMap, "veins", RUBY_METHOD_FUNC(rb_mapveins), 3);
 
-    rb_cMapBlock = rb_define_class_under(rb_cMap, "Block", rb_cObject);
-    rb_define_method(rb_cMapBlock, "memaddr", RUBY_METHOD_FUNC(rb_blockaddr), 0);
+    rb_cMapBlock = rb_define_class_under(rb_cMap, "Block", rb_cWrapData);
     rb_define_method(rb_cMapBlock, "tiletype", RUBY_METHOD_FUNC(rb_blockttype), 2);
     rb_define_method(rb_cMapBlock, "tiletype_set", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
     rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
@@ -575,6 +626,19 @@ static void ruby_dfhack_bind(void) {
     rb_define_method(rb_cMapBlock, "designationmap=", RUBY_METHOD_FUNC(rb_blockdesignmapset), 1);
     rb_define_method(rb_cMapBlock, "flags", RUBY_METHOD_FUNC(rb_blockflags), 0);
     rb_define_method(rb_cMapBlock, "flags=", RUBY_METHOD_FUNC(rb_blockflagsset), 1);
+
+    rb_cPlant = rb_define_class_under(rb_cDFHack, "Plant", rb_cWrapData);
+    rb_define_method(rb_cPlant, "material",  RUBY_METHOD_FUNC(rb_plantmaterial), 0);
+    rb_define_method(rb_cPlant, "material=", RUBY_METHOD_FUNC(rb_plantmaterialset), 1);
+    rb_define_method(rb_cPlant, "pos", RUBY_METHOD_FUNC(rb_plantpos), 0);
+    rb_define_method(rb_cPlant, "is_shrub",  RUBY_METHOD_FUNC(rb_plantisshrub), 0);
+    rb_define_method(rb_cPlant, "is_shrub=", RUBY_METHOD_FUNC(rb_plantisshrubset), 1);
+    rb_define_method(rb_cPlant, "is_burning",  RUBY_METHOD_FUNC(rb_plantisburning), 0);
+    rb_define_method(rb_cPlant, "is_burning=", RUBY_METHOD_FUNC(rb_plantisburningset), 1);
+    rb_define_method(rb_cPlant, "grow_counter",  RUBY_METHOD_FUNC(rb_plantgrowcounter), 0);
+    rb_define_method(rb_cPlant, "grow_counter=", RUBY_METHOD_FUNC(rb_plantgrowcounterset), 1);
+    rb_define_method(rb_cPlant, "hitpoints",  RUBY_METHOD_FUNC(rb_planthitpoints), 0);
+    rb_define_method(rb_cPlant, "hitpoints=", RUBY_METHOD_FUNC(rb_planthitpointsset), 1);
 
     int state=0;
     rb_load_protect(rb_str_new2("./hack/plugins/ruby.rb"), Qfalse, &state);
