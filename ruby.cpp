@@ -13,6 +13,7 @@ using namespace std;
 #include <dfhack/Export.h>
 #include <dfhack/PluginManager.h>
 #include <dfhack/VersionInfo.h>
+#include <dfhack/modules/Creatures.h>
 #include <dfhack/modules/Maps.h>
 #include <dfhack/modules/Gui.h>
 #include <dfhack/extra/MapExtras.h>
@@ -28,6 +29,7 @@ static command_result df_rubyload (Core * c, vector <string> & parameters);
 static command_result df_rubyeval (Core * c, vector <string> & parameters);
 static void ruby_dfhack_bind(void);
 
+// inter-thread communication stuff
 enum RB_command {
     RB_IDLE,
     RB_INIT,
@@ -36,7 +38,6 @@ enum RB_command {
     RB_EVAL,
     RB_CUSTOM,
 };
-
 mutex *m_irun;
 mutex *m_mutex;
 static RB_command r_type;
@@ -44,6 +45,7 @@ static const char *r_command;
 static command_result r_result;
 static thread *r_thread;
 
+// dfhack interface
 DFhackCExport const char * plugin_name ( void )
 {
     return "ruby";
@@ -169,7 +171,7 @@ static command_result df_rubyeval(Core * c, vector <string> & parameters)
 
 
 
-
+// ruby thread code
 static void dump_rb_error(void)
 {
     Console &con = Core::getInstance().con;
@@ -190,6 +192,7 @@ static void dump_rb_error(void)
             con.printerr(" %s\n", rb_string_value_ptr(&s));
 }
 
+// ruby thread main loop
 static void df_rubythread(void *p)
 {
     int state, running;
@@ -247,15 +250,19 @@ static void df_rubythread(void *p)
     }
 }
 
-// helper functions
+
+
+// ruby classes
 static VALUE rb_cDFHack;
 static VALUE rb_cCoord;
 static VALUE rb_cWrapData;
+static VALUE rb_cCreature;
 static VALUE rb_cMap;
 static VALUE rb_cMapBlock;
 static VALUE rb_cPlant;
 
 
+// helper functions
 static inline Core& getcore(void)
 {
     return Core::getInstance();
@@ -266,30 +273,32 @@ static VALUE df_newcoord(int x, int y, int z)
     return rb_funcall(rb_cCoord, rb_intern("new"), 3, INT2FIX(x), INT2FIX(y), INT2FIX(z));
 }
 
-#define NUMERIC_ACCESSOR(funcname, type, fieldname) \
-    static VALUE rb_ ## funcname (VALUE self) { \
-        type *var; \
-        Data_Get_Struct(self, type, var); \
-        return rb_uint2inum(var->fieldname); \
-    } \
+// defines two C functions to access a numeric field from ruby
+#define NUMERIC_ACCESSOR(funcname, type, fieldname)               \
+    static VALUE rb_ ## funcname (VALUE self) {                   \
+        type *var;                                                \
+        Data_Get_Struct(self, type, var);                         \
+        return rb_uint2inum(var->fieldname);                      \
+    }                                                             \
     static VALUE rb_ ## funcname ## set (VALUE self, VALUE val) { \
-        type *var; \
-        Data_Get_Struct(self, type, var); \
-        var->fieldname = rb_num2ulong(val); \
-        return Qtrue; \
+        type *var;                                                \
+        Data_Get_Struct(self, type, var);                         \
+        var->fieldname = rb_num2ulong(val);                       \
+        return Qtrue;                                             \
     }
 
-#define FLAG_ACCESSOR(funcname, type, fieldname) \
-    static VALUE rb_ ## funcname (VALUE self) { \
-        type *var; \
-        Data_Get_Struct(self, type, var); \
-        return (var->fieldname ? Qtrue : Qfalse); \
-    } \
-    static VALUE rb_ ## funcname ## set (VALUE self, VALUE val) { \
-        type *var; \
-        Data_Get_Struct(self, type, var); \
+// defines two C functions to access a boolean field from ruby
+#define FLAG_ACCESSOR(funcname, type, fieldname)                        \
+    static VALUE rb_ ## funcname (VALUE self) {                         \
+        type *var;                                                      \
+        Data_Get_Struct(self, type, var);                               \
+        return (var->fieldname ? Qtrue : Qfalse);                       \
+    }                                                                   \
+    static VALUE rb_ ## funcname ## set (VALUE self, VALUE val) {       \
+        type *var;                                                      \
+        Data_Get_Struct(self, type, var);                               \
         var->fieldname = ((val == Qtrue || val == INT2FIX(1)) ? 1 : 0); \
-        return Qtrue; \
+        return Qtrue;                                                   \
     }
 
 
@@ -388,6 +397,7 @@ static VALUE rb_guiviewset(VALUE self, VALUE x, VALUE y, VALUE z)
     return Qtrue;
 }
 
+// return the array of all Plants on the map
 static VALUE rb_dfvegetation(VALUE self)
 {
     DFHack::Vegetation *veg = getcore().getVegetation();
@@ -399,6 +409,33 @@ static VALUE rb_dfvegetation(VALUE self)
         rb_ary_push(ret, Data_Wrap_Struct(rb_cPlant, 0, 0, veg->all_plants->at(i)));
 
     return ret;
+}
+
+// return the array of all Creatures
+static VALUE rb_dfcreatures(VALUE self)
+{
+    DFHack::Creatures *c = getcore().getCreatures();
+    uint32_t ncrea = 0;
+
+    c->Start(ncrea);
+
+    VALUE ret = rb_ary_new();
+    for (unsigned i=0 ; i<ncrea ; ++i)
+        // XXX we need a direct pointer to the DF object, but the api only gives us a copy
+        //rb_ary_push(ret, Data_Wrap_Struct(rb_cCreature, 0, 0, c->all_creatures->at(i)));
+        ;
+
+    return ret;
+}
+
+static VALUE rb_getlaborname(VALUE self, VALUE idx)
+{
+    return rb_str_new2(getcore().vinfo->getLabor(FIX2INT(idx)).c_str());
+}
+
+static VALUE rb_getskillname(VALUE self, VALUE idx)
+{
+    return rb_str_new2(getcore().vinfo->getSkill(FIX2INT(idx)).c_str());
 }
 
 
@@ -429,6 +466,7 @@ static VALUE rb_mapstopfeat(VALUE self)
     return Qtrue;
 }
 
+// DF map size (in blocks)
 static VALUE rb_mapsize(VALUE self)
 {
     Maps *map;
@@ -440,6 +478,7 @@ static VALUE rb_mapsize(VALUE self)
     return df_newcoord(x, y, z);
 }
 
+// returns the Block at xyz (block coords)
 static VALUE rb_mapblock(VALUE self, VALUE x, VALUE y, VALUE z)
 {
     Maps *map;
@@ -453,6 +492,7 @@ static VALUE rb_mapblock(VALUE self, VALUE x, VALUE y, VALUE z)
     return Data_Wrap_Struct(rb_cMapBlock, 0, 0, block);
 }
 
+// returns the array of [vein type (uint32), vein bitmap (char[32] = uint16[16])] (block coords)
 static VALUE rb_mapveins(VALUE self, VALUE x, VALUE y, VALUE z)
 {
     Maps *map;
@@ -463,7 +503,6 @@ static VALUE rb_mapveins(VALUE self, VALUE x, VALUE y, VALUE z)
     
     map->SortBlockEvents(FIX2INT(x), FIX2INT(y), FIX2INT(z), &veins);
 
-    // return an array of [vein type (uint32), vein bitmap (string of 16*16bits = 32chars)
     ret = rb_ary_new();
 
     for (unsigned i=0 ; i<veins.size() ; ++i) {
@@ -489,6 +528,7 @@ static VALUE rb_memaddr(VALUE self)
 
     return rb_uint2inum((uint32_t)data);
 }
+
 
 
 // change tile type of tile (x%16, y%16) (uint16)
@@ -519,10 +559,9 @@ static VALUE rb_blockttypeset(VALUE self, VALUE x, VALUE y, VALUE tt)
    0000_0070 designated job for the tile
     0none 1dig 2updownstair 3channel 4ramp 5downstair 6upstair 7?
    0000_0180 flag job? 8smooth 10engrave
-   0000_0200 visible (discovered)
+   0000_0200 hidden (fog of war)
    0001_c000 10outside 8light 4subterranean
-   0020_0000 magma/lava (in/outdoor)
-   1000_0000 'mossy'
+   0020_0000 water level = magma ('lava' when outdoor)
  */
 static VALUE rb_blockdesign(VALUE self, VALUE x, VALUE y)
 {
@@ -546,7 +585,7 @@ static VALUE rb_blockdesignset(VALUE self, VALUE x, VALUE y, VALUE tt)
     return Qtrue;
 }
 
-// returns the raw block designation chunk
+// returns the raw block designation chunk (16*16*uint32)
 static VALUE rb_blockdesignmap(VALUE self)
 {
     df_block *block;
@@ -571,8 +610,6 @@ NUMERIC_ACCESSOR(blockflags, df_block, flags)
 
 
 // Vegetation
-NUMERIC_ACCESSOR(plantmaterial, df_plant, material)
-
 static VALUE rb_plantpos(VALUE self)
 {
     df_plant *plant;
@@ -581,16 +618,108 @@ static VALUE rb_plantpos(VALUE self)
     return df_newcoord(plant->x, plant->y, plant->z);
 }
 
+NUMERIC_ACCESSOR(plantmaterial, df_plant, material)
 FLAG_ACCESSOR(plantisshrub, df_plant, is_shrub)
-
 FLAG_ACCESSOR(plantisburning, df_plant, is_burning)
-
 NUMERIC_ACCESSOR(plantgrowcounter, df_plant, grow_counter)
-
 NUMERIC_ACCESSOR(planthitpoints, df_plant, hitpoints)
 
 
+    
 
+static VALUE rb_creapos(VALUE self)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    return df_newcoord(crea->x, crea->y, crea->z);
+}
+
+static VALUE rb_creafirstname(VALUE self)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    return rb_str_new2(crea->name.first_name);
+}
+
+static VALUE rb_creanickname(VALUE self)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    return rb_str_new2(crea->name.nickname);
+}
+
+static VALUE rb_crealastname(VALUE self)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+    // TODO
+
+    return rb_str_new2(""); // wordlist[crea->name.words]);
+}
+
+// returns the full table of labors (uint8[102])
+static VALUE rb_crealabors(VALUE self)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    // XXX NUM_CREATURE_LABORS
+    return rb_str_new((char*)crea->labors, 102);
+}
+
+static VALUE rb_crealaborsset(VALUE self, VALUE tt)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    memcpy(crea->labors, rb_string_value_ptr(&tt), 102);
+
+    return Qtrue;
+}
+
+// returns the full table of skills (uint32[nskills][3] = [id, rating, xp])
+static VALUE rb_creaskills(VALUE self)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    return rb_str_new((char*)crea->defaultSoul.skills, 3*4*crea->defaultSoul.numSkills);
+}
+
+// raw set skills, also patch the numSkills
+static VALUE rb_creaskillsset(VALUE self, VALUE tt)
+{
+    t_creature *crea;
+    Data_Get_Struct(self, t_creature, crea);
+
+    crea->defaultSoul.numSkills = FIX2INT(rb_funcall(tt, rb_intern("length"), 0)) / (3*4);
+
+    // numSkills = uint8, cannot overflow
+    memcpy(crea->defaultSoul.skills, rb_string_value_ptr(&tt), 3*4*crea->defaultSoul.numSkills);
+
+    return Qtrue;
+}
+
+NUMERIC_ACCESSOR(crearace, t_creature, race)
+NUMERIC_ACCESSOR(creaciv, t_creature, civ)
+
+NUMERIC_ACCESSOR(creaflags1, t_creature, flags1.whole)
+NUMERIC_ACCESSOR(creaflags2, t_creature, flags1.whole)
+NUMERIC_ACCESSOR(creaflags3, t_creature, flags1.whole)
+
+NUMERIC_ACCESSOR(creamood, t_creature, mood)
+NUMERIC_ACCESSOR(creamoodskill, t_creature, mood_skill)
+
+NUMERIC_ACCESSOR(creastrength, t_creature, strength.level)
+NUMERIC_ACCESSOR(creaagility, t_creature, agility.level)
+NUMERIC_ACCESSOR(creatoughness, t_creature, toughness.level)
+
+NUMERIC_ACCESSOR(creasex, t_creature, sex)
+NUMERIC_ACCESSOR(creacaste, t_creature, caste)
+NUMERIC_ACCESSOR(creapregtimer, t_creature, pregnancy_timer)
 
 // done
 static void ruby_dfhack_bind(void) {
@@ -610,8 +739,16 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "view", RUBY_METHOD_FUNC(rb_guiview), 0);
     rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
     rb_define_singleton_method(rb_cDFHack, "vegetation", RUBY_METHOD_FUNC(rb_dfvegetation), 0);
+    rb_define_singleton_method(rb_cDFHack, "creatures", RUBY_METHOD_FUNC(rb_dfcreatures), 0);
+    rb_define_singleton_method(rb_cDFHack, "laborname", RUBY_METHOD_FUNC(rb_getlaborname), 1);
+    rb_define_singleton_method(rb_cDFHack, "skillname", RUBY_METHOD_FUNC(rb_getskillname), 1);
 
     rb_cCoord = rb_define_class_under(rb_cDFHack, "Coord", rb_cObject);
+
+// defines reader/writer functions
+#define ACCESSOR(cls, method, func) \
+    rb_define_method(cls, method, RUBY_METHOD_FUNC(rb_ ## func), 0); \
+    rb_define_method(cls, method "=", RUBY_METHOD_FUNC(rb_ ## func ## set), 1)
 
     rb_cWrapData = rb_define_class_under(rb_cDFHack, "WrapData", rb_cObject);
     rb_define_method(rb_cWrapData, "memaddr", RUBY_METHOD_FUNC(rb_memaddr), 0);
@@ -629,24 +766,39 @@ static void ruby_dfhack_bind(void) {
     rb_define_method(rb_cMapBlock, "tiletype_set", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
     rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
     rb_define_method(rb_cMapBlock, "designation_set", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
-    rb_define_method(rb_cMapBlock, "designationmap", RUBY_METHOD_FUNC(rb_blockdesignmap), 0);
-    rb_define_method(rb_cMapBlock, "designationmap=", RUBY_METHOD_FUNC(rb_blockdesignmapset), 1);
-    rb_define_method(rb_cMapBlock, "flags", RUBY_METHOD_FUNC(rb_blockflags), 0);
-    rb_define_method(rb_cMapBlock, "flags=", RUBY_METHOD_FUNC(rb_blockflagsset), 1);
+    ACCESSOR(rb_cMapBlock, "designationmap", blockdesignmap);
+    ACCESSOR(rb_cMapBlock, "flags", blockflags);
 
     rb_cPlant = rb_define_class_under(rb_cDFHack, "Plant", rb_cWrapData);
-    rb_define_method(rb_cPlant, "material",  RUBY_METHOD_FUNC(rb_plantmaterial), 0);
-    rb_define_method(rb_cPlant, "material=", RUBY_METHOD_FUNC(rb_plantmaterialset), 1);
     rb_define_method(rb_cPlant, "pos", RUBY_METHOD_FUNC(rb_plantpos), 0);
-    rb_define_method(rb_cPlant, "is_shrub",  RUBY_METHOD_FUNC(rb_plantisshrub), 0);
-    rb_define_method(rb_cPlant, "is_shrub=", RUBY_METHOD_FUNC(rb_plantisshrubset), 1);
-    rb_define_method(rb_cPlant, "is_burning",  RUBY_METHOD_FUNC(rb_plantisburning), 0);
-    rb_define_method(rb_cPlant, "is_burning=", RUBY_METHOD_FUNC(rb_plantisburningset), 1);
-    rb_define_method(rb_cPlant, "grow_counter",  RUBY_METHOD_FUNC(rb_plantgrowcounter), 0);
-    rb_define_method(rb_cPlant, "grow_counter=", RUBY_METHOD_FUNC(rb_plantgrowcounterset), 1);
-    rb_define_method(rb_cPlant, "hitpoints",  RUBY_METHOD_FUNC(rb_planthitpoints), 0);
-    rb_define_method(rb_cPlant, "hitpoints=", RUBY_METHOD_FUNC(rb_planthitpointsset), 1);
+    ACCESSOR(rb_cPlant, "material", plantmaterial);
+    ACCESSOR(rb_cPlant, "is_shrub", plantisshrub);
+    ACCESSOR(rb_cPlant, "is_burning", plantisburning);
+    ACCESSOR(rb_cPlant, "grow_counter", plantgrowcounter);
+    ACCESSOR(rb_cPlant, "hitpoints", planthitpoints);
 
+    rb_cCreature = rb_define_class_under(rb_cDFHack, "Creature", rb_cWrapData);
+    rb_define_method(rb_cCreature, "pos", RUBY_METHOD_FUNC(rb_creapos), 0);
+    rb_define_method(rb_cCreature, "firstname", RUBY_METHOD_FUNC(rb_creafirstname), 0);
+    rb_define_method(rb_cCreature, "nickname", RUBY_METHOD_FUNC(rb_creanickname), 0);
+    rb_define_method(rb_cCreature, "lastname", RUBY_METHOD_FUNC(rb_crealastname), 0);
+    ACCESSOR(rb_cCreature, "labors", crealabors);
+    ACCESSOR(rb_cCreature, "skills", creaskills);
+    ACCESSOR(rb_cCreature, "race", crearace);
+    ACCESSOR(rb_cCreature, "civ", creaciv);
+    ACCESSOR(rb_cCreature, "mood", creamood);
+    ACCESSOR(rb_cCreature, "mood_skill", creamoodskill);
+    ACCESSOR(rb_cCreature, "flags1", creaflags1);
+    ACCESSOR(rb_cCreature, "flags2", creaflags2);
+    ACCESSOR(rb_cCreature, "flags3", creaflags3);
+    ACCESSOR(rb_cCreature, "strength", creastrength);
+    ACCESSOR(rb_cCreature, "agility", creaagility);
+    ACCESSOR(rb_cCreature, "toughness", creatoughness);
+    ACCESSOR(rb_cCreature, "sex", creasex);
+    ACCESSOR(rb_cCreature, "caste", creacaste);
+    ACCESSOR(rb_cCreature, "pregnancy_timer", creapregtimer);
+
+    // load the default ruby-level definitions
     int state=0;
     rb_load_protect(rb_str_new2("./hack/plugins/ruby.rb"), Qfalse, &state);
     if (state)
