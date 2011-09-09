@@ -1,9 +1,41 @@
     // XXX 102 is wrong, with that much there is no space for the std::vector coming after that
     // max = 96
     #define NUM_CREATURE_LABORS 96
-    //#define NUM_CREATURE_TRAITS 30
-    //#define NUM_CREATURE_MENTAL_ATTRIBUTES 13
-    //#define NUM_CREATURE_PHYSICAL_ATTRIBUTES 6
+    #define NUM_CREATURE_TRAITS 30
+    #define NUM_CREATURE_MENTAL_ATTRIBUTES 13
+    #define NUM_CREATURE_PHYSICAL_ATTRIBUTES 6
+
+    struct df_attrib {
+        uint32_t unk_0;
+        uint32_t unk_4;
+        uint32_t unk_8;
+        uint32_t unk_c;
+        uint32_t unk_10;
+        uint32_t unk_14;
+        uint32_t unk_18;
+    };
+
+    struct df_soul
+    {
+        uint32_t unk_0;
+        df_name name;   // 4
+        uint32_t unk_70;
+        uint16_t unk_74;
+        uint16_t unk_76;
+        int32_t unk_78;
+        int32_t unk_7c;
+        int32_t unk_80;
+        int32_t unk_84;
+        df_attrib mental[NUM_CREATURE_MENTAL_ATTRIBUTES];       // 88..1f3
+        std::vector<uint32_t> unk_1f4;
+        std::vector<uint32_t> skills;    // 204
+        uint16_t traits[NUM_CREATURE_TRAITS];   // 214
+        std::vector<uint32_t> unk_250;
+        uint32_t unk_260;
+        uint32_t unk_264;
+        uint32_t unk_268;
+        uint32_t unk_26c;
+    };
 
     struct df_creature
     {
@@ -115,11 +147,13 @@
         int32_t unk_27c;
         int16_t unk_280;
         int32_t unk_284;
+
         std::vector<void*> inventory;   // 288
-        std::vector<uint32_t> unk_298;
+        std::vector<uint32_t> owned_items;      // 298
         std::vector<uint32_t> unk_2a8;
         std::vector<uint32_t> unk_2b8;
         std::vector<uint32_t> unk_2c8;
+
         uint32_t unk_2d8;
         uint32_t unk_2dc;
         uint32_t unk_2e0;
@@ -132,6 +166,7 @@
         uint32_t unk_2fc;
         uint32_t unk_300;
         uint32_t unk_304;
+
         std::vector<uint32_t> unk_308;
         std::vector<uint32_t> unk_318;
         std::vector<uint32_t> unk_328;
@@ -141,6 +176,7 @@
         std::vector<uint32_t> unk_368;
         std::vector<uint32_t> unk_378;
         std::vector<uint32_t> unk_388;
+
         uint32_t unk_398;
         int32_t unk_39c;
         int32_t unk_3a0;
@@ -154,55 +190,16 @@
         int32_t unk_3c0;
         uint32_t unk_3c4;
         uint32_t unk_3c8;
-        uint32_t unk_3cc;
-        uint32_t unk_3d0;
-        uint32_t unk_3d4;
-        uint32_t unk_3d8;
-        uint32_t unk_3dc;
-        uint32_t unk_3e0;
-        uint32_t unk_3e4;
-        uint32_t unk_3e8;
-        uint32_t unk_3ec;
-        uint32_t unk_3f0;
-        uint32_t unk_3f4;
-        uint32_t unk_3f8;
-        uint32_t unk_3fc;
-        uint32_t unk_400;
-        uint32_t unk_404;
-        uint32_t unk_408;
-        uint32_t unk_40c;
-        uint32_t unk_410;
-        uint32_t unk_414;
-        uint32_t unk_418;
-        uint32_t unk_41c;
-        uint32_t unk_420;
-        uint32_t unk_424;
-        uint32_t unk_428;
-        uint32_t unk_42c;
-        uint32_t unk_430;
-        uint32_t unk_434;
-        uint32_t unk_438;
-        uint32_t unk_43c;
-        uint32_t unk_440;
-        uint32_t unk_444;
-        uint32_t unk_448;
-        uint32_t unk_44c;
-        uint32_t unk_450;
-        uint32_t unk_454;
-        uint32_t unk_458;
-        uint32_t unk_45c;
-        uint32_t unk_460;
-        uint32_t unk_464;
-        uint32_t unk_468;
-        uint32_t unk_46c;
-        uint32_t unk_470;
+
+        df_attrib physical[NUM_CREATURE_PHYSICAL_ATTRIBUTES];   // 3cc..473
         uint32_t unk_474;
         uint32_t unk_478;
         uint32_t unk_47c;
         uint32_t unk_480;
         uint32_t unk_484;
         uint32_t unk_488;
-        uint32_t unk_48c;
+
+        uint32_t unk_48c;       // blood_max?
         uint32_t blood_count;   // 490
         uint32_t unk_494;
         std::vector<void*> unk_498;
@@ -220,7 +217,7 @@
         uint16_t* unk_524;
         uint16_t unk_528;
         uint16_t unk_52a;
-        std::vector<uint32_t> appearance_vector;        // 52c
+        std::vector<uint32_t> appearance;        // 52c
         uint32_t unk_53c;
         uint32_t unk_540;
         uint32_t unk_544;
@@ -262,8 +259,8 @@
         int16_t unk_5dc;
         int16_t unk_5de;
         df_name unk_5e0;
-        std::vector<void*> soul_vector; // 64c
-        void* current_soul;     // 65c
+        std::vector<df_soul*> souls;      // 64c
+        df_soul* current_soul;  // 65c
         std::vector<uint32_t> unk_660;
         uint8_t labors[NUM_CREATURE_LABORS];    // 670..6cf
 
@@ -285,10 +282,10 @@
         std::vector<uint16_t> unk_760;
         std::vector<uint16_t> unk_770;
         std::vector<uint16_t> unk_780;
-        uint32_t unk_790;
-        uint16_t able_stand;    // 794
+        uint32_t hist_figure_id;        // 790
+        uint16_t able_stand;            // 794
         uint16_t able_stand_impair;     // 796
-        uint16_t able_grasp;    // 798
+        uint16_t able_grasp;            // 798
         uint16_t able_grasp_impair;     // 79a
         uint32_t unk_79c;
         uint32_t unk_7a0;
@@ -297,12 +294,14 @@
         uint32_t unk_7b8;
         uint32_t unk_7bc;
         int32_t unk_7c0;
+
         std::vector<uint32_t> unk_7c4;
         std::vector<uint32_t> unk_7d4;
         std::vector<uint32_t> unk_7e4;
         std::vector<uint32_t> unk_7f4;
         std::vector<uint32_t> unk_804;
         std::vector<uint32_t> unk_814;
+
         uint32_t unk_824;
         void* unk_828;
         void* unk_82c;
@@ -310,6 +309,7 @@
         void* unk_834;
         void* unk_838;
         void* unk_83c;
+
         std::vector<void*> unk_840;
         std::vector<uint32_t> unk_850;
         std::vector<uint32_t> unk_860;
@@ -325,6 +325,7 @@
         std::vector<uint32_t> unk_8e8;
         std::vector<uint32_t> unk_8f8;
         std::vector<uint32_t> unk_908;
+
         int32_t unk_918;
         uint16_t unk_91c;
         uint16_t unk_91e;
@@ -335,3 +336,4 @@
         std::vector<uint16_t> unk_92c;
         uint32_t unk_93c;
     };
+
