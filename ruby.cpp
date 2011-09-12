@@ -338,7 +338,7 @@ static VALUE rb_dfprint_err(VALUE self, VALUE s)
 // WARNING: may cause game crash ! double-check your addresses !
 static VALUE rb_dfmemread(VALUE self, VALUE addr, VALUE len)
 {
-    return rb_str_new((char*)rb_uint2inum(addr), rb_uint2inum(len));
+    return rb_str_new((char*)rb_num2ulong(addr), rb_num2ulong(len));
 }
 
 static VALUE rb_dfmemwrite(VALUE self, VALUE addr, VALUE raw)
@@ -350,6 +350,32 @@ static VALUE rb_dfmemwrite(VALUE self, VALUE addr, VALUE raw)
 
     return Qtrue;
 }
+
+// raw c++ wrappers
+// return the nth element of a vector
+static VALUE rb_dfvectorat(VALUE self, VALUE vect_addr, VALUE idx)
+{
+    vector<uint32_t> *v = (vector<uint32_t>*)rb_num2ulong(vect_addr);
+    return rb_uint2inum(v->at(FIX2INT(idx)));
+}
+
+// return a c++ string as a ruby string (nul-terminated)
+static VALUE rb_dfreadstring(VALUE self, VALUE str_addr)
+{
+    string *s = (string*)rb_num2ulong(str_addr);
+    return rb_str_new2(s->c_str());
+}
+
+// raw Memory.xml access
+// getoffset("Materials", "inorganics")
+static VALUE rb_dfgetaddress(VALUE self, VALUE group, VALUE off)
+{
+    OffsetGroup *grp = getcore().vinfo->getGroup(rb_string_value_ptr(&group));
+    unsigned long ret = grp->getAddress(rb_string_value_ptr(&off));
+    return rb_uint2inum(ret);
+}
+
+
 
 
 /* XXX this needs a custom DFHack::Plugin subclass to pass the cmdname to invoke(), to match the ruby callback
@@ -411,19 +437,16 @@ static VALUE rb_dfvegetation(VALUE self)
     return ret;
 }
 
+#include "df_creature.h"
 // return the array of all Creatures
 static VALUE rb_dfcreatures(VALUE self)
 {
-    DFHack::Creatures *c = getcore().getCreatures();
-    uint32_t ncrea = 0;
-
-    c->Start(ncrea);
+    OffsetGroup *ogc = getcore().vinfo->getGroup("Creatures");
+    vector <df_creature*> *v = (vector<df_creature*>*)ogc->getAddress("vector");
 
     VALUE ret = rb_ary_new();
-    for (unsigned i=0 ; i<ncrea ; ++i)
-        // XXX we need a direct pointer to the DF object, but the api only gives us a copy
-        //rb_ary_push(ret, Data_Wrap_Struct(rb_cCreature, 0, 0, c->all_creatures->at(i)));
-        ;
+    for (unsigned i=0 ; i<v->size() ; ++i)
+        rb_ary_push(ret, Data_Wrap_Struct(rb_cCreature, 0, 0, v->at(i)));
 
     return ret;
 }
@@ -629,97 +652,131 @@ NUMERIC_ACCESSOR(planthitpoints, df_plant, hitpoints)
 
 static VALUE rb_creapos(VALUE self)
 {
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
 
     return df_newcoord(crea->x, crea->y, crea->z);
 }
 
-static VALUE rb_creafirstname(VALUE self)
+static VALUE rb_creaname(VALUE self)
 {
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
 
-    return rb_str_new2(crea->name.first_name);
+    string &name = crea->name.first_name;        // TODO decode_df_name(crea->name);
+    return rb_str_new2(name.c_str());
 }
 
-static VALUE rb_creanickname(VALUE self)
-{
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
-
-    return rb_str_new2(crea->name.nickname);
-}
-
-static VALUE rb_crealastname(VALUE self)
-{
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
-    // TODO
-
-    return rb_str_new2(""); // wordlist[crea->name.words]);
-}
-
-// returns the full table of labors (uint8[102])
+// returns the full table of labors (uint8[96])
 static VALUE rb_crealabors(VALUE self)
 {
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
 
-    // XXX NUM_CREATURE_LABORS
-    return rb_str_new((char*)crea->labors, 102);
+    return rb_str_new((char*)crea->labors, sizeof(crea->labors));
 }
 
 static VALUE rb_crealaborsset(VALUE self, VALUE tt)
 {
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
 
-    memcpy(crea->labors, rb_string_value_ptr(&tt), 102);
+    memcpy(crea->labors, rb_string_value_ptr(&tt), sizeof(crea->labors));
 
     return Qtrue;
 }
 
-// returns the full table of skills (uint32[nskills][3] = [id, rating, xp])
+// returns the full table of physical_attributes ([uint32*5]*6)
+// strength, agility, toughness, endurance, recuperation, disease_resistance
+static VALUE rb_creaattribs(VALUE self)
+{
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
+
+    return rb_str_new((char*)crea->physical, sizeof(crea->physical));
+}
+
+static VALUE rb_creaattribsset(VALUE self, VALUE tt)
+{
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
+
+    memcpy(crea->physical, rb_string_value_ptr(&tt), sizeof(crea->physical));
+
+    return Qtrue;
+}
+
+// returns the full table of skills (ary of [id, rating, xp, unknown(String)])
 static VALUE rb_creaskills(VALUE self)
 {
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
 
-    return rb_str_new((char*)crea->defaultSoul.skills, 3*4*crea->defaultSoul.numSkills);
+    auto &v = crea->current_soul->skills;
+    VALUE ret = rb_ary_new();
+
+    for (unsigned i=0 ; i<v.size() ; ++i) {
+        VALUE elem = rb_ary_new();
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->id));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->rating));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->experience));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->unk_c));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->rusty));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->unk_14));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->unk_18));
+        rb_ary_push(elem, rb_uint2inum(v.at(i)->unk_1c));
+        rb_ary_push(ret, elem);
+    }
+
+    return ret;
 }
 
-// raw set skills, also patch the numSkills
 static VALUE rb_creaskillsset(VALUE self, VALUE tt)
 {
-    t_creature *crea;
-    Data_Get_Struct(self, t_creature, crea);
+    df_creature *crea;
+    Data_Get_Struct(self, df_creature, crea);
 
-    crea->defaultSoul.numSkills = FIX2INT(rb_funcall(tt, rb_intern("length"), 0)) / (3*4);
+    VALUE elem;
+    auto &v = crea->current_soul->skills;
 
-    // numSkills = uint8, cannot overflow
-    memcpy(crea->defaultSoul.skills, rb_string_value_ptr(&tt), 3*4*crea->defaultSoul.numSkills);
+    tt = rb_ary_dup(tt);
+
+    for (unsigned i=0 ; i<v.size() ; ++i)
+        delete v.at(i);
+    v.clear();
+
+    while ((elem = rb_ary_shift(tt)) != Qnil) {
+        df_skill *sk = new df_skill();
+        elem = rb_ary_dup(elem);
+
+        sk->id = rb_num2ulong(rb_ary_shift(elem));
+        sk->rating = rb_num2ulong(rb_ary_shift(elem));
+        sk->experience = rb_num2ulong(rb_ary_shift(elem));
+        sk->unk_c = rb_num2ulong(rb_ary_shift(elem));
+        sk->rusty = rb_num2ulong(rb_ary_shift(elem));
+        sk->unk_14 = rb_num2ulong(rb_ary_shift(elem));
+        sk->unk_18 = rb_num2ulong(rb_ary_shift(elem));
+        sk->unk_1c = rb_num2ulong(rb_ary_shift(elem));
+
+        v.push_back(sk);
+    }
 
     return Qtrue;
 }
 
-NUMERIC_ACCESSOR(crearace, t_creature, race)
-NUMERIC_ACCESSOR(creaciv, t_creature, civ)
+NUMERIC_ACCESSOR(crearace, df_creature, race)
+NUMERIC_ACCESSOR(creaciv, df_creature, civ)
 
-NUMERIC_ACCESSOR(creaflags1, t_creature, flags1.whole)
-NUMERIC_ACCESSOR(creaflags2, t_creature, flags1.whole)
-NUMERIC_ACCESSOR(creaflags3, t_creature, flags1.whole)
+NUMERIC_ACCESSOR(creaflags1, df_creature, flags1.whole)
+NUMERIC_ACCESSOR(creaflags2, df_creature, flags2.whole)
+NUMERIC_ACCESSOR(creaflags3, df_creature, flags3.whole)
 
-NUMERIC_ACCESSOR(creamood, t_creature, mood)
-NUMERIC_ACCESSOR(creamoodskill, t_creature, mood_skill)
+NUMERIC_ACCESSOR(creamood, df_creature, mood)
 
-NUMERIC_ACCESSOR(creastrength, t_creature, strength.level)
-NUMERIC_ACCESSOR(creaagility, t_creature, agility.level)
-NUMERIC_ACCESSOR(creatoughness, t_creature, toughness.level)
-
-NUMERIC_ACCESSOR(creasex, t_creature, sex)
-NUMERIC_ACCESSOR(creacaste, t_creature, caste)
-NUMERIC_ACCESSOR(creapregtimer, t_creature, pregnancy_timer)
+NUMERIC_ACCESSOR(creasex, df_creature, sex)
+NUMERIC_ACCESSOR(creacaste, df_creature, caste)
+NUMERIC_ACCESSOR(creapregtimer, df_creature, pregnancy_timer)
+NUMERIC_ACCESSOR(creagraspimpair, df_creature, able_grasp_impair)
 
 // done
 static void ruby_dfhack_bind(void) {
@@ -732,6 +789,9 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "print_err", RUBY_METHOD_FUNC(rb_dfprint_err), 1);
     rb_define_singleton_method(rb_cDFHack, "memread", RUBY_METHOD_FUNC(rb_dfmemread), 2);
     rb_define_singleton_method(rb_cDFHack, "memwrite", RUBY_METHOD_FUNC(rb_dfmemwrite), 2);
+    rb_define_singleton_method(rb_cDFHack, "vectorat", RUBY_METHOD_FUNC(rb_dfvectorat), 2);
+    rb_define_singleton_method(rb_cDFHack, "readstring", RUBY_METHOD_FUNC(rb_dfreadstring), 1);
+    rb_define_singleton_method(rb_cDFHack, "getaddress", RUBY_METHOD_FUNC(rb_dfgetaddress), 2);
     rb_define_singleton_method(rb_cDFHack, "register_dfcommand", RUBY_METHOD_FUNC(rb_dfregister), 2);
 
     rb_define_singleton_method(rb_cDFHack, "cursor", RUBY_METHOD_FUNC(rb_guicursor), 0);
@@ -779,24 +839,20 @@ static void ruby_dfhack_bind(void) {
 
     rb_cCreature = rb_define_class_under(rb_cDFHack, "Creature", rb_cWrapData);
     rb_define_method(rb_cCreature, "pos", RUBY_METHOD_FUNC(rb_creapos), 0);
-    rb_define_method(rb_cCreature, "firstname", RUBY_METHOD_FUNC(rb_creafirstname), 0);
-    rb_define_method(rb_cCreature, "nickname", RUBY_METHOD_FUNC(rb_creanickname), 0);
-    rb_define_method(rb_cCreature, "lastname", RUBY_METHOD_FUNC(rb_crealastname), 0);
+    rb_define_method(rb_cCreature, "name", RUBY_METHOD_FUNC(rb_creaname), 0);
     ACCESSOR(rb_cCreature, "labors", crealabors);
+    ACCESSOR(rb_cCreature, "attribs", creaattribs);
     ACCESSOR(rb_cCreature, "skills", creaskills);
     ACCESSOR(rb_cCreature, "race", crearace);
     ACCESSOR(rb_cCreature, "civ", creaciv);
     ACCESSOR(rb_cCreature, "mood", creamood);
-    ACCESSOR(rb_cCreature, "mood_skill", creamoodskill);
     ACCESSOR(rb_cCreature, "flags1", creaflags1);
     ACCESSOR(rb_cCreature, "flags2", creaflags2);
     ACCESSOR(rb_cCreature, "flags3", creaflags3);
-    ACCESSOR(rb_cCreature, "strength", creastrength);
-    ACCESSOR(rb_cCreature, "agility", creaagility);
-    ACCESSOR(rb_cCreature, "toughness", creatoughness);
     ACCESSOR(rb_cCreature, "sex", creasex);
     ACCESSOR(rb_cCreature, "caste", creacaste);
     ACCESSOR(rb_cCreature, "pregnancy_timer", creapregtimer);
+    ACCESSOR(rb_cCreature, "able_grasp_impaired", creagraspimpair);
 
     // load the default ruby-level definitions
     int state=0;

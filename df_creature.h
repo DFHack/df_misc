@@ -15,6 +15,17 @@
         uint32_t unk_18;
     };
 
+    struct df_skill {
+        uint16_t id;    // 0
+        int32_t rating; // 4
+        uint32_t experience;    // 8
+        uint32_t unk_c;
+        uint32_t rusty; // 10
+        uint32_t unk_14;
+        uint32_t unk_18;
+        uint32_t unk_1c;
+    };
+
     struct df_soul
     {
         uint32_t unk_0;
@@ -27,10 +38,10 @@
         int32_t unk_80;
         int32_t unk_84;
         df_attrib mental[NUM_CREATURE_MENTAL_ATTRIBUTES];       // 88..1f3
-        std::vector<uint32_t> unk_1f4;
-        std::vector<uint32_t> skills;    // 204
+        std::vector<df_skill*> skills;  // 1f4;
+        std::vector<void*> unk_204;     // pointers to 14 0x14-byte structures
         uint16_t traits[NUM_CREATURE_TRAITS];   // 214
-        std::vector<uint32_t> unk_250;
+        std::vector<int16_t*> unk_250;  // 1 pointer to 2 shorts
         uint32_t unk_260;
         uint32_t unk_264;
         uint32_t unk_268;
@@ -56,18 +67,18 @@
         int16_t unk_a2;
         uint32_t unk_a4;
 
-        uint16_t dest_x;
-        uint16_t dest_y;
-        uint16_t dest_z;
+        uint16_t dest_x;        // a8
+        uint16_t dest_y;        // aa
+        uint16_t dest_z;        // ac
         uint16_t unk_ae;        // -1
 
         std::vector<uint32_t> unk_b0;   // b0->df (3*4 in MSVC) -> 68->8b (3*3 in glibc)
         std::vector<uint32_t> unk_c0;
         std::vector<uint32_t> unk_d0;
 
-        t_creaturflags1 flags_1;        // e0
-        t_creaturflags2 flags_2;        // e4
-        t_creaturflags3 flags_3;        // e8
+        t_creaturflags1 flags1;         // e0
+        t_creaturflags2 flags2;         // e4
+        t_creaturflags3 flags3;         // e8
 
         void ** unk_ec;
         int32_t unk_f0;
@@ -118,7 +129,7 @@
         uint32_t unk_20c;
 
         int16_t mood;           // 210
-        uint32_t pregnancy;     // 214
+        uint32_t pregnancy_timer;       // 214
         void* pregnancy_ptr;    // 218
         int32_t unk_21c;
         uint32_t unk_220;
@@ -218,13 +229,18 @@
         uint16_t unk_528;
         uint16_t unk_52a;
         std::vector<uint32_t> appearance;        // 52c
-        uint32_t unk_53c;
-        uint32_t unk_540;
-        uint32_t unk_544;
+        int16_t unk_53c;
         int16_t unk_53e;
         int16_t unk_540;
         int16_t unk_542;
-        uint32_t unk_544;
+        int16_t unk_544;
+        int16_t unk_546;
+        int16_t unk_548;
+        int16_t unk_54a;
+        int16_t unk_54c;
+        int16_t unk_54e;
+        int16_t unk_550;
+        int16_t unk_552;
         int16_t unk_x554;       // coords ? (-30.000x3)
         int16_t unk_y556;
         int16_t unk_z558;
@@ -251,7 +267,7 @@
         uint32_t unk_59c;
 
         std::vector<void*> unk_5a0;
-        void* unk_5b0;
+        void* unk_5b0;          // pointer to X (12?) vector<int16_t>
         uint32_t unk_5b4;       // 0x3e8 (1000)
         uint32_t unk_5b8;       // 0x3e8 (1000)
         std::vector<uint32_t> unk_5bc;
