@@ -59,6 +59,28 @@ class Map
 	end
 end
 
+class Creature
+	def dead?
+		flags1 & 2 == 2
+	end
+
+	def alive?
+		!dead?
+	end
+
+	def matcre
+		@@matcre ||= DFHack.mat_creatures
+	end
+
+	def racerawname
+		matcre[race].name
+	end
+
+	def casterawname
+		matcre[race].castename(sex)
+	end
+end
+
 class << self
 	def cursor=(c)
 		case c
@@ -103,6 +125,10 @@ class << self
 		}
 	end
 
+	def creature_by_id(id)
+		creatures.find { |c| c.id == id }
+	end
+
 	def test
 		puts "starting"
 
@@ -125,6 +151,21 @@ class << self
 		}
 
 		puts "done"
+	end
+
+	# catsplosion !
+	def catsplosion(racecheck=/^CAT$/, onlyfemales=true)
+		suspend {
+			creatures.each { |c|
+				if c.alive? and c.racerawname =~ racecheck and (!onlyfemales or c.casterawname == 'FEMALE')
+					if c.pregnancy_timer > 0
+						c.pregnancy_timer = rand(100)
+
+						puts "catsplosed #{c.id} #{c.racerawname}"
+					end
+				end
+			}
+		}
 	end
 end
 

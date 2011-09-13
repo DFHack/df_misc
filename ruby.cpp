@@ -260,6 +260,7 @@ static VALUE rb_cCreature;
 static VALUE rb_cMap;
 static VALUE rb_cMapBlock;
 static VALUE rb_cPlant;
+static VALUE rb_cMatCreature;
 
 
 // helper functions
@@ -447,6 +448,18 @@ static VALUE rb_dfcreatures(VALUE self)
     VALUE ret = rb_ary_new();
     for (unsigned i=0 ; i<v->size() ; ++i)
         rb_ary_push(ret, Data_Wrap_Struct(rb_cCreature, 0, 0, v->at(i)));
+
+    return ret;
+}
+
+static VALUE rb_dfmatcreatures(VALUE self)
+{
+    OffsetGroup *ogc = getcore().vinfo->getGroup("Materials");
+    vector <df_mat_creature*> *v = (vector<df_mat_creature*>*)ogc->getAddress("creature_type_vector");
+
+    VALUE ret = rb_ary_new();
+    for (unsigned i=0 ; i<v->size() ; ++i)
+        rb_ary_push(ret, Data_Wrap_Struct(rb_cMatCreature, 0, 0, v->at(i)));
 
     return ret;
 }
@@ -765,6 +778,7 @@ static VALUE rb_creaskillsset(VALUE self, VALUE tt)
 }
 
 NUMERIC_ACCESSOR(crearace, df_creature, race)
+NUMERIC_ACCESSOR(creaid, df_creature, id)
 NUMERIC_ACCESSOR(creaciv, df_creature, civ)
 
 NUMERIC_ACCESSOR(creaflags1, df_creature, flags1.whole)
@@ -777,6 +791,29 @@ NUMERIC_ACCESSOR(creasex, df_creature, sex)
 NUMERIC_ACCESSOR(creacaste, df_creature, caste)
 NUMERIC_ACCESSOR(creapregtimer, df_creature, pregnancy_timer)
 NUMERIC_ACCESSOR(creagraspimpair, df_creature, able_grasp_impair)
+
+
+
+static VALUE rb_matcrename(VALUE self)
+{
+    df_mat_creature *matcre;
+    Data_Get_Struct(self, df_mat_creature, matcre);
+
+    return rb_str_new2(matcre->rawname.c_str());
+}
+
+static VALUE rb_matcrecastename(VALUE self, VALUE idx)
+{
+    df_mat_creature *matcre;
+    Data_Get_Struct(self, df_mat_creature, matcre);
+    std::vector<df_mat_creature_caste*> &v = matcre->castes;
+
+    if (FIX2INT(idx) < v.size())
+        return rb_str_new2(v.at(FIX2INT(idx))->name.c_str());
+    else
+        return Qnil;
+}
+
 
 // done
 static void ruby_dfhack_bind(void) {
@@ -800,6 +837,7 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "view_set", RUBY_METHOD_FUNC(rb_guiviewset), 3);
     rb_define_singleton_method(rb_cDFHack, "vegetation", RUBY_METHOD_FUNC(rb_dfvegetation), 0);
     rb_define_singleton_method(rb_cDFHack, "creatures", RUBY_METHOD_FUNC(rb_dfcreatures), 0);
+    rb_define_singleton_method(rb_cDFHack, "mat_creatures", RUBY_METHOD_FUNC(rb_dfmatcreatures), 0);
     rb_define_singleton_method(rb_cDFHack, "laborname", RUBY_METHOD_FUNC(rb_getlaborname), 1);
     rb_define_singleton_method(rb_cDFHack, "skillname", RUBY_METHOD_FUNC(rb_getskillname), 1);
 
@@ -844,6 +882,7 @@ static void ruby_dfhack_bind(void) {
     ACCESSOR(rb_cCreature, "attribs", creaattribs);
     ACCESSOR(rb_cCreature, "skills", creaskills);
     ACCESSOR(rb_cCreature, "race", crearace);
+    ACCESSOR(rb_cCreature, "id", creaid);
     ACCESSOR(rb_cCreature, "civ", creaciv);
     ACCESSOR(rb_cCreature, "mood", creamood);
     ACCESSOR(rb_cCreature, "flags1", creaflags1);
@@ -853,6 +892,10 @@ static void ruby_dfhack_bind(void) {
     ACCESSOR(rb_cCreature, "caste", creacaste);
     ACCESSOR(rb_cCreature, "pregnancy_timer", creapregtimer);
     ACCESSOR(rb_cCreature, "able_grasp_impaired", creagraspimpair);
+
+    rb_cMatCreature = rb_define_class_under(rb_cDFHack, "MatCreature", rb_cWrapData);
+    rb_define_method(rb_cMatCreature, "name", RUBY_METHOD_FUNC(rb_matcrename), 0);
+    rb_define_method(rb_cMatCreature, "castename", RUBY_METHOD_FUNC(rb_matcrecastename), 1);   // idx = creature.sex
 
     // load the default ruby-level definitions
     int state=0;

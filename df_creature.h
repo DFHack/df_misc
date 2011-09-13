@@ -86,8 +86,7 @@
         int16_t unk_f6;
         uint16_t caste;         // f8
         uint8_t sex;            // fa
-        uint16_t unk_fc;
-        uint16_t unk_fe;
+        uint32_t id;            // fc
         uint16_t unk_100;
         uint16_t unk_102;
         int32_t unk_104;
@@ -353,3 +352,37 @@
         uint32_t unk_93c;
     };
 
+
+
+    struct df_mat_creature_caract {
+        std::string name;       // beauty
+        int16_t value1;
+        int16_t value2;
+    };
+
+    struct df_mat_creature_caste {
+        std::string name;       // FEMALE
+        std::string strings[34];        // toad toads toad  14='remains' 15='remains' 16='A squat amphibian..'
+        // some more stuff here
+    };
+
+    struct df_mat_creature {
+        std::string rawname;    // TOAD
+        std::string name1;      // toad
+        std::string name2;      // toads
+        std::string name3;      // toad
+        std::string unk_4;
+        std::string unk_5;
+        std::string unk_6;
+        std::string unk_7;
+
+        int16_t unk_8[20];
+
+        std::vector<df_mat_creature_caract*> caracts;
+        std::vector<uint32_t> unk_a;
+        std::vector<df_mat_creature_caste*> castes;
+        std::vector<uint32_t> unk_c;
+
+        void *unk_d;
+        uint32_t unk_e;
+    };
