@@ -261,6 +261,8 @@ static VALUE rb_cMap;
 static VALUE rb_cMapBlock;
 static VALUE rb_cPlant;
 static VALUE rb_cMatCreature;
+static VALUE rb_cMatInorganic;
+static VALUE rb_cMatOrganic;
 
 
 // helper functions
@@ -455,11 +457,40 @@ static VALUE rb_dfcreatures(VALUE self)
 static VALUE rb_dfmatcreatures(VALUE self)
 {
     OffsetGroup *ogc = getcore().vinfo->getGroup("Materials");
-    vector <df_mat_creature*> *v = (vector<df_mat_creature*>*)ogc->getAddress("creature_type_vector");
+    auto v = (vector<df_creature_material*>*)ogc->getAddress("creature_type_vector");
 
     VALUE ret = rb_ary_new();
     for (unsigned i=0 ; i<v->size() ; ++i)
         rb_ary_push(ret, Data_Wrap_Struct(rb_cMatCreature, 0, 0, v->at(i)));
+
+    return ret;
+}
+
+static VALUE rb_dfmatinorganic(VALUE self)
+{
+    OffsetGroup *ogc = getcore().vinfo->getGroup("Materials");
+    auto v = (vector<df_inorganic_material*>*)ogc->getAddress("inorganics");
+
+    VALUE ret = rb_ary_new();
+    for (unsigned i=0 ; i<v->size() ; ++i)
+        rb_ary_push(ret, Data_Wrap_Struct(rb_cMatInorganic, 0, 0, v->at(i)));
+
+    return ret;
+}
+
+struct df_organic_material {
+    std::string name;
+    // TODO
+};
+
+static VALUE rb_dfmatorganic(VALUE self)
+{
+    OffsetGroup *ogc = getcore().vinfo->getGroup("Materials");
+    auto v = (vector<df_organic_material*>*)ogc->getAddress("organics_all");
+
+    VALUE ret = rb_ary_new();
+    for (unsigned i=0 ; i<v->size() ; ++i)
+        rb_ary_push(ret, Data_Wrap_Struct(rb_cMatOrganic, 0, 0, v->at(i)));
 
     return ret;
 }
@@ -796,22 +827,40 @@ NUMERIC_ACCESSOR(creagraspimpair, df_creature, able_grasp_impair)
 
 static VALUE rb_matcrename(VALUE self)
 {
-    df_mat_creature *matcre;
-    Data_Get_Struct(self, df_mat_creature, matcre);
+    df_creature_material *matcre;
+    Data_Get_Struct(self, df_creature_material, matcre);
 
     return rb_str_new2(matcre->rawname.c_str());
 }
 
 static VALUE rb_matcrecastename(VALUE self, VALUE idx)
 {
-    df_mat_creature *matcre;
-    Data_Get_Struct(self, df_mat_creature, matcre);
-    std::vector<df_mat_creature_caste*> &v = matcre->castes;
+    df_creature_material *matcre;
+    Data_Get_Struct(self, df_creature_material, matcre);
+    std::vector<df_creature_mat_caste*> &v = matcre->castes;
 
     if (FIX2INT(idx) < v.size())
         return rb_str_new2(v.at(FIX2INT(idx))->name.c_str());
     else
         return Qnil;
+}
+
+
+static VALUE rb_matinoname(VALUE self)
+{
+    df_inorganic_material *matino;
+    Data_Get_Struct(self, df_inorganic_material, matino);
+
+    return rb_str_new2(matino->Inorganic_ID.c_str());
+}
+
+
+static VALUE rb_matorgname(VALUE self)
+{
+    df_organic_material *matorg;
+    Data_Get_Struct(self, df_organic_material, matorg);
+
+    return rb_str_new2(matorg->name.c_str());
 }
 
 
@@ -838,6 +887,8 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "vegetation", RUBY_METHOD_FUNC(rb_dfvegetation), 0);
     rb_define_singleton_method(rb_cDFHack, "creatures", RUBY_METHOD_FUNC(rb_dfcreatures), 0);
     rb_define_singleton_method(rb_cDFHack, "mat_creatures", RUBY_METHOD_FUNC(rb_dfmatcreatures), 0);
+    rb_define_singleton_method(rb_cDFHack, "mat_inorganic", RUBY_METHOD_FUNC(rb_dfmatinorganic), 0);
+    rb_define_singleton_method(rb_cDFHack, "mat_organic", RUBY_METHOD_FUNC(rb_dfmatorganic), 0);
     rb_define_singleton_method(rb_cDFHack, "laborname", RUBY_METHOD_FUNC(rb_getlaborname), 1);
     rb_define_singleton_method(rb_cDFHack, "skillname", RUBY_METHOD_FUNC(rb_getskillname), 1);
 
@@ -896,6 +947,13 @@ static void ruby_dfhack_bind(void) {
     rb_cMatCreature = rb_define_class_under(rb_cDFHack, "MatCreature", rb_cWrapData);
     rb_define_method(rb_cMatCreature, "name", RUBY_METHOD_FUNC(rb_matcrename), 0);
     rb_define_method(rb_cMatCreature, "castename", RUBY_METHOD_FUNC(rb_matcrecastename), 1);   // idx = creature.sex
+
+    rb_cMatInorganic = rb_define_class_under(rb_cDFHack, "MatInorganic", rb_cWrapData);
+    rb_define_method(rb_cMatInorganic, "name", RUBY_METHOD_FUNC(rb_matinoname), 0);
+
+    rb_cMatOrganic = rb_define_class_under(rb_cDFHack, "MatOrganic", rb_cWrapData);
+    rb_define_method(rb_cMatOrganic, "name", RUBY_METHOD_FUNC(rb_matorgname), 0);
+
 
     // load the default ruby-level definitions
     int state=0;

@@ -1,5 +1,8 @@
     // XXX 102 is wrong, with that much there is no space for the std::vector coming after that
     // max = 96
+#ifdef NUM_CREATURE_LABORS
+#undef NUM_CREATURE_LABORS
+#endif
     #define NUM_CREATURE_LABORS 96
     #define NUM_CREATURE_TRAITS 30
     #define NUM_CREATURE_MENTAL_ATTRIBUTES 13
@@ -354,19 +357,19 @@
 
 
 
-    struct df_mat_creature_caract {
+    struct df_creature_mat_caract {
         std::string name;       // beauty
         int16_t value1;
         int16_t value2;
     };
 
-    struct df_mat_creature_caste {
+    struct df_creature_mat_caste {
         std::string name;       // FEMALE
         std::string strings[34];        // toad toads toad  14='remains' 15='remains' 16='A squat amphibian..'
         // some more stuff here
     };
 
-    struct df_mat_creature {
+    struct df_creature_material {
         std::string rawname;    // TOAD
         std::string name1;      // toad
         std::string name2;      // toads
@@ -378,9 +381,9 @@
 
         int16_t unk_8[20];
 
-        std::vector<df_mat_creature_caract*> caracts;
+        std::vector<df_creature_mat_caract*> caracts;
         std::vector<uint32_t> unk_a;
-        std::vector<df_mat_creature_caste*> castes;
+        std::vector<df_creature_mat_caste*> castes;
         std::vector<uint32_t> unk_c;
 
         void *unk_d;
