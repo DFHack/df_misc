@@ -259,6 +259,7 @@ static VALUE rb_cWrapData;
 static VALUE rb_cCreature;
 static VALUE rb_cMap;
 static VALUE rb_cMapBlock;
+static VALUE rb_cMapVein;
 static VALUE rb_cPlant;
 static VALUE rb_cMatCreature;
 static VALUE rb_cMatInorganic;
@@ -533,7 +534,7 @@ static VALUE rb_mapstopfeat(VALUE self)
     return Qtrue;
 }
 
-// DF map size (in blocks)
+// DF map size (in tiles)
 static VALUE rb_mapsize(VALUE self)
 {
     Maps *map;
@@ -542,48 +543,47 @@ static VALUE rb_mapsize(VALUE self)
 
     map->getSize(x, y, z);
 
-    return df_newcoord(x, y, z);
+    return df_newcoord(x*16, y*16, z);
 }
 
-// returns the Block at xyz (block coords)
+// returns the Block at xyz (tile coords)
 static VALUE rb_mapblock(VALUE self, VALUE x, VALUE y, VALUE z)
 {
     Maps *map;
     Data_Get_Struct(self, Maps, map);
     df_block *block;
 
-    block = map->getBlock(FIX2INT(x), FIX2INT(y), FIX2INT(z));
+    block = map->getBlock(FIX2INT(x)/16, FIX2INT(y)/16, FIX2INT(z));
     if (!block)
         return Qnil;
 
     return Data_Wrap_Struct(rb_cMapBlock, 0, 0, block);
 }
 
-// returns the array of [vein type (uint32), vein bitmap (char[32] = uint16[16])] (block coords)
-static VALUE rb_mapveins(VALUE self, VALUE x, VALUE y, VALUE z)
+// return an array of array of geology layer indexes (used to get base rock material)
+static VALUE rb_mapreadgeology(VALUE self)
 {
     Maps *map;
-    VALUE ret;
-    std::vector <DFHack::t_vein *> veins;
-
     Data_Get_Struct(self, Maps, map);
-    
-    map->SortBlockEvents(FIX2INT(x), FIX2INT(y), FIX2INT(z), &veins);
+    std::vector<std::vector<uint16_t>> v;
+    std::vector<uint16_t> *vv;
 
-    ret = rb_ary_new();
+    if (!map->ReadGeology(v))
+        return Qnil;
 
-    for (unsigned i=0 ; i<veins.size() ; ++i) {
-        VALUE elem = rb_ary_new();
-
-        rb_ary_push(elem, rb_uint2inum(veins[i]->type));
-        rb_ary_push(elem, rb_str_new((char*)veins[i]->assignment, 32));
-
+    VALUE ret = rb_ary_new();
+    VALUE elem;
+    for (unsigned i=0 ; i<v.size() ; ++i) {
+        vv = &v.at(i);
+        elem = rb_ary_new();
+        for (unsigned ii=0 ; ii<vv->size() ; ++ii) {
+            rb_ary_push(elem, INT2FIX(vv->at(ii)));
+        }
         rb_ary_push(ret, elem);
     }
 
     return ret;
 }
-
 
 
 
@@ -597,6 +597,16 @@ static VALUE rb_memaddr(VALUE self)
 }
 
 
+
+
+// return the coords of the block in the map (in tile units)
+static VALUE rb_blockpos(VALUE self)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+    
+    return df_newcoord(block->map_x, block->map_y, block->map_z);
+}
 
 // change tile type of tile (x%16, y%16) (uint16)
 static VALUE rb_blockttype(VALUE self, VALUE x, VALUE y)
@@ -621,10 +631,64 @@ static VALUE rb_blockttypeset(VALUE self, VALUE x, VALUE y, VALUE tt)
     return Qtrue;
 }
 
+static VALUE rb_blocktname(VALUE self, VALUE x, VALUE y)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+    int tile;
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+
+    tile = block->tiletype[x][y];
+
+    const char *name = tileName(tile);
+    if (name)
+        return rb_str_new2(name);
+    else
+        return Qnil;
+}
+
+static VALUE rb_blocktshape(VALUE self, VALUE x, VALUE y)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+    int tile;
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+
+    tile = block->tiletype[x][y];
+
+    const char *name = TileShapeString[tileShape(tile)];
+    if (name)
+        return rb_str_new2(name);
+    else
+        return Qnil;
+}
+
+static VALUE rb_blocktmat(VALUE self, VALUE x, VALUE y)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+    int tile;
+
+    x = FIX2INT(x) & 15;
+    y = FIX2INT(y) & 15;
+
+    tile = block->tiletype[x][y];
+
+    const char *name = TileMaterialString[tileMaterial(tile)];
+    if (name)
+        return rb_str_new2(name);
+    else
+        return Qnil;
+}
+
 // change designation of tile (x%16, y%16) (uint32)
 /* 0000_0007 water level
    0000_0070 designated job for the tile
-    0none 1dig 2updownstair 3channel 4ramp 5downstair 6upstair 7?
+   0none 1dig 2updownstair 3channel 4ramp 5downstair 6upstair 7?
    0000_0180 flag job? 8smooth 10engrave
    0000_0200 hidden (fog of war)
    0001_c000 10outside 8light 4subterranean
@@ -658,7 +722,7 @@ static VALUE rb_blockdesignmap(VALUE self)
     df_block *block;
     Data_Get_Struct(self, df_block, block);
 
-    return rb_str_new((char*)block->designation, 16*16*sizeof(**block->designation));
+    return rb_str_new((char*)block->designation, sizeof(block->designation));
 }
 
 static VALUE rb_blockdesignmapset(VALUE self, VALUE raw)
@@ -666,17 +730,76 @@ static VALUE rb_blockdesignmapset(VALUE self, VALUE raw)
     df_block *block;
     Data_Get_Struct(self, df_block, block);
 
-    memcpy(block->designation, rb_string_value_ptr(&raw), 16*16*sizeof(**block->designation));
+    memcpy(block->designation, rb_string_value_ptr(&raw), sizeof(block->designation));
 
     return Qtrue;
 }
 
 NUMERIC_ACCESSOR(blockflags, df_block, flags)
 
+// returns the array of Map::Veins
+static VALUE rb_blockveins(VALUE self)
+{
+    df_block *block;
+    Maps *map;
+    VALUE ret;
+    std::vector <DFHack::t_vein *> veins;
+
+    map = getcore().getMaps();
+    if (!map->Start())
+        rb_raise(rb_eRuntimeError, "map_start");
+
+    Data_Get_Struct(self, df_block, block);
+    
+    map->SortBlockEvents(block->map_x/16, block->map_y/16, block->map_z, &veins);
+
+    ret = rb_ary_new();
+
+    for (unsigned i=0 ; i<veins.size() ; ++i)
+        rb_ary_push(ret, Data_Wrap_Struct(rb_cMapVein, 0, 0, veins.at(i)));
+
+    return ret;
+}
+
+static VALUE rb_blockregoffset(VALUE self, VALUE idx)
+{
+    df_block *block;
+    Data_Get_Struct(self, df_block, block);
+
+    idx = FIX2INT(idx);
+    if (idx >= sizeof(block->region_offset))
+        return Qnil;
+    else
+        return INT2FIX(block->region_offset[idx]);
+}
 
 
 
-// Vegetation
+// Map::Vein
+NUMERIC_ACCESSOR(veintype, t_vein, type)
+NUMERIC_ACCESSOR(veinflags, t_vein, flags)
+
+// access the vein assignment bitmap (16*uint16, bit = assign[y] & (1<<x))
+static VALUE rb_veinassign(VALUE self)
+{
+    t_vein *vein;
+    Data_Get_Struct(self, t_vein, vein);
+
+    return rb_str_new((char*)vein->assignment, sizeof(vein->assignment));
+}
+
+static VALUE rb_veinassignset(VALUE self, VALUE raw)
+{
+    t_vein *vein;
+    Data_Get_Struct(self, t_vein, vein);
+
+    memcpy(vein->assignment, rb_string_value_ptr(&raw), sizeof(vein->assignment));
+
+    return Qtrue;
+}
+
+
+    // Vegetation
 static VALUE rb_plantpos(VALUE self)
 {
     df_plant *plant;
@@ -685,14 +808,14 @@ static VALUE rb_plantpos(VALUE self)
     return df_newcoord(plant->x, plant->y, plant->z);
 }
 
-NUMERIC_ACCESSOR(plantmaterial, df_plant, material)
-FLAG_ACCESSOR(plantisshrub, df_plant, is_shrub)
-FLAG_ACCESSOR(plantisburning, df_plant, is_burning)
-NUMERIC_ACCESSOR(plantgrowcounter, df_plant, grow_counter)
+    NUMERIC_ACCESSOR(plantmaterial, df_plant, material)
+    FLAG_ACCESSOR(plantisshrub, df_plant, is_shrub)
+    FLAG_ACCESSOR(plantisburning, df_plant, is_burning)
+    NUMERIC_ACCESSOR(plantgrowcounter, df_plant, grow_counter)
 NUMERIC_ACCESSOR(planthitpoints, df_plant, hitpoints)
 
 
-    
+
 
 static VALUE rb_creapos(VALUE self)
 {
@@ -808,19 +931,19 @@ static VALUE rb_creaskillsset(VALUE self, VALUE tt)
     return Qtrue;
 }
 
-NUMERIC_ACCESSOR(crearace, df_creature, race)
-NUMERIC_ACCESSOR(creaid, df_creature, id)
+    NUMERIC_ACCESSOR(crearace, df_creature, race)
+    NUMERIC_ACCESSOR(creaid, df_creature, id)
 NUMERIC_ACCESSOR(creaciv, df_creature, civ)
 
-NUMERIC_ACCESSOR(creaflags1, df_creature, flags1.whole)
-NUMERIC_ACCESSOR(creaflags2, df_creature, flags2.whole)
+    NUMERIC_ACCESSOR(creaflags1, df_creature, flags1.whole)
+    NUMERIC_ACCESSOR(creaflags2, df_creature, flags2.whole)
 NUMERIC_ACCESSOR(creaflags3, df_creature, flags3.whole)
 
 NUMERIC_ACCESSOR(creamood, df_creature, mood)
 
-NUMERIC_ACCESSOR(creasex, df_creature, sex)
-NUMERIC_ACCESSOR(creacaste, df_creature, caste)
-NUMERIC_ACCESSOR(creapregtimer, df_creature, pregnancy_timer)
+    NUMERIC_ACCESSOR(creasex, df_creature, sex)
+    NUMERIC_ACCESSOR(creacaste, df_creature, caste)
+    NUMERIC_ACCESSOR(creapregtimer, df_creature, pregnancy_timer)
 NUMERIC_ACCESSOR(creagraspimpair, df_creature, able_grasp_impair)
 
 
@@ -894,7 +1017,7 @@ static void ruby_dfhack_bind(void) {
 
     rb_cCoord = rb_define_class_under(rb_cDFHack, "Coord", rb_cObject);
 
-// defines reader/writer functions
+    // defines reader/writer functions
 #define ACCESSOR(cls, method, func) \
     rb_define_method(cls, method, RUBY_METHOD_FUNC(rb_ ## func), 0); \
     rb_define_method(cls, method "=", RUBY_METHOD_FUNC(rb_ ## func ## set), 1)
@@ -908,15 +1031,26 @@ static void ruby_dfhack_bind(void) {
     rb_define_method(rb_cMap, "stopfeatures", RUBY_METHOD_FUNC(rb_mapstopfeat), 0);
     rb_define_method(rb_cMap, "size", RUBY_METHOD_FUNC(rb_mapsize), 0);         // size in 16x16 blocks
     rb_define_method(rb_cMap, "block", RUBY_METHOD_FUNC(rb_mapblock), 3);
-    rb_define_method(rb_cMap, "veins", RUBY_METHOD_FUNC(rb_mapveins), 3);
+    rb_define_method(rb_cMap, "read_geology", RUBY_METHOD_FUNC(rb_mapreadgeology), 0);
 
     rb_cMapBlock = rb_define_class_under(rb_cMap, "Block", rb_cWrapData);
+    rb_define_method(rb_cMapBlock, "pos", RUBY_METHOD_FUNC(rb_blockpos), 0);
     rb_define_method(rb_cMapBlock, "tiletype", RUBY_METHOD_FUNC(rb_blockttype), 2);
     rb_define_method(rb_cMapBlock, "tiletype_set", RUBY_METHOD_FUNC(rb_blockttypeset), 3);
     rb_define_method(rb_cMapBlock, "designation", RUBY_METHOD_FUNC(rb_blockdesign), 2);
     rb_define_method(rb_cMapBlock, "designation_set", RUBY_METHOD_FUNC(rb_blockdesignset), 3);
+    rb_define_method(rb_cMapBlock, "tilename", RUBY_METHOD_FUNC(rb_blocktname), 2);
+    rb_define_method(rb_cMapBlock, "tileshape", RUBY_METHOD_FUNC(rb_blocktshape), 2);
+    rb_define_method(rb_cMapBlock, "tilemat", RUBY_METHOD_FUNC(rb_blocktmat), 2);
     ACCESSOR(rb_cMapBlock, "designationmap", blockdesignmap);
     ACCESSOR(rb_cMapBlock, "flags", blockflags);
+    rb_define_method(rb_cMapBlock, "veins", RUBY_METHOD_FUNC(rb_blockveins), 0);
+    rb_define_method(rb_cMapBlock, "region_offset", RUBY_METHOD_FUNC(rb_blockregoffset), 1);
+
+    rb_cMapVein = rb_define_class_under(rb_cMap, "Vein", rb_cWrapData);
+    ACCESSOR(rb_cMapVein, "type", veintype);
+    ACCESSOR(rb_cMapVein, "flags", veinflags);
+    ACCESSOR(rb_cMapVein, "assignment", veinassign);
 
     rb_cPlant = rb_define_class_under(rb_cDFHack, "Plant", rb_cWrapData);
     rb_define_method(rb_cPlant, "pos", RUBY_METHOD_FUNC(rb_plantpos), 0);

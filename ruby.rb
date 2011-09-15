@@ -5,6 +5,14 @@ class Coord
 		@x = x; @y = y; @z = z
 	end
 
+	def ==(o)
+		o.class == self.class and o.x == self.x and o.y == self.y and o.z == self.z
+	end
+
+	def ===(o)
+		o == self or (o.respond_to?(:pos) and o.pos == self)
+	end
+
 	def to_s
 		"x=#@x, y=#@y, z=#@z"
 	end
@@ -36,26 +44,67 @@ class Map
 		def reveal
 			self.designationmap = self.designationmap.unpack('v*').map { |t| t & ~HIDDEN }.pack('v*')
 		end
+
+		def matname(idx)
+			@@matino ||= DFHack.mat_inorganic
+			if idx >= 0 and m = @@matino[idx]
+				m.name
+			end
+		end
+
+		def basemat(x=DFHack.cursor, y=nil)
+			if x.kind_of? Coord
+				x, y = x.x, x.y
+			end
+
+			@@map_geology ||= Map.new.read_geology
+			x &= 15
+			y &= 15
+			des = designation(x, y)
+			geolayer_idx = (des >> 10) & 0xf
+			biome_idx    = (des >> 17) & 0xf
+			idx = @@map_geology[region_offset(biome_idx)][geolayer_idx]
+			matname(idx)
+		end
+
+		def veinmat(x=DFHack.cursor, y=nil)
+			if x.kind_of? Coord
+				x, y = x.x, x.y
+			end
+
+			x &= 15
+			y &= 15
+			# the right one is the last
+			mat = nil
+			veins.each { |v|
+				if v.assignment.unpack('v*')[y] & (1 << x) != 0
+					mat = matname(v.type)
+				end
+			}
+			mat
+		end
+
+		def dumpveins(pos=DFHack.cursor)
+			veins.each { |v|
+				DFHack.puts "vein #{v.type}", v.assignment.unpack('v*').map { |v| (' %016b' % v).reverse }
+			}
+		end
 	end
 
+	if !instance_methods.map { |im| im.to_sym }.include? :oldblock
 	alias oldblock block
 	def block(x=DFHack.cursor, y=nil, z=nil)
 		if x.kind_of? Coord
-			x, y, z = x.x/16, x.y/16, x.z
+			x, y, z = x.x, x.y, x.z
 		end
 		oldblock(x, y, z)
 	end
-
-	def dig(x, y, z, type=:dig)
-		if b = block(x/16, y/16, z)
-			b.dig(x, y, type)
-		end
 	end
 
-	def dumpveins(pos=DFHack.cursor)
-		veins(pos.x/16, pos.y/16, pos.z).each { |type, raw|
-			DFHack.puts "vein #{type}", raw.unpack('v*').map { |v| (' %016b' % v).reverse }
-		}
+	def dig(x, y, z, type=:dig)
+		if b = block(x, y, z)
+			b.dig(x, y, type)
+		end
 	end
 end
 
@@ -144,7 +193,7 @@ class << self
 				b.dig(c, :updown)
 				b.reveal
 
-				m.dumpveins(c)
+				b.dumpveins
 			else
 				puts "no block here"
 			end
