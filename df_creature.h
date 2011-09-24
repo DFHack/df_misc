@@ -3,7 +3,7 @@
 #ifdef NUM_CREATURE_LABORS
 #undef NUM_CREATURE_LABORS
 #endif
-    #define NUM_CREATURE_LABORS 96
+    #define NUM_CREATURE_LABORS 94
     #define NUM_CREATURE_TRAITS 30
     #define NUM_CREATURE_MENTAL_ATTRIBUTES 13
     #define NUM_CREATURE_PHYSICAL_ATTRIBUTES 6
@@ -29,9 +29,19 @@
         uint32_t unk_1c;
     };
 
+    struct df_like {
+        uint16_t type;  // like material, like metal, like color, abhor creature
+        uint16_t unk_2;
+        uint16_t unk_4;
+        int16_t unk_6;
+        uint32_t unk_8; // like material -> material id
+        uint32_t active;        // boolean
+        uint32_t unk_10;        // magic value
+    };
+
     struct df_soul
     {
-        uint32_t unk_0;
+        uint32_t creature_id;
         df_name name;   // 4
         uint32_t unk_70;
         uint16_t unk_74;
@@ -42,13 +52,89 @@
         int32_t unk_84;
         df_attrib mental[NUM_CREATURE_MENTAL_ATTRIBUTES];       // 88..1f3
         std::vector<df_skill*> skills;  // 1f4;
-        std::vector<void*> unk_204;     // pointers to 14 0x14-byte structures
+        std::vector<df_like*> likes;
         uint16_t traits[NUM_CREATURE_TRAITS];   // 214
         std::vector<int16_t*> unk_250;  // 1 pointer to 2 shorts
         uint32_t unk_260;
         uint32_t unk_264;
         uint32_t unk_268;
         uint32_t unk_26c;
+    };
+
+
+    struct df_taskref {
+        uint32_t unk_0;
+        struct df_job* task;
+        uint32_t unk_8;
+    };
+
+    struct df_item {        // item_woodst etc
+        void *vtable;
+        int16_t x;
+        int16_t y;
+        int16_t z;
+        int16_t pad_a;
+        uint32_t flags;
+        uint32_t unk_10;
+        uint32_t unk_14;
+        std::vector<df_taskref*> inuse;
+        std::vector<void*> refs;     // general_ref_building_holderst
+        // more uints here (type-specific?)
+    };
+
+    struct df_job_link {
+        struct df_job *job;
+        struct df_job_link *prev;	// goes up to DwarfFortress.exe#.data
+        struct df_job_link *next;
+    };
+
+    struct df_job_actor {
+        void *vtable;
+        uint32_t id;    // creature id (general_ref_unit_workerst)
+                        // building id (general_ref_building_holderst when construct building)
+    };
+
+    struct df_matref {
+        df_item *item;  // item_boulderst, etc
+        uint32_t unk_4;
+        uint32_t unk_8;
+        uint32_t unk_c;
+    };
+
+    struct df_job
+    {
+        uint32_t job_id;
+        df_job_link* job_links;
+        int16_t unk_8;
+        int16_t unk_a;
+        int32_t unk_c;
+        int16_t x;
+        int16_t y;
+        int16_t z;
+        int32_t unk_18;
+        uint32_t unk_1c;
+        uint32_t unk_20;
+        int16_t unk_24;
+        int32_t unk_28;
+        int16_t unk_2c;
+        int16_t unk_2e;
+        int16_t unk_30;
+        uint32_t unk_34;
+        int32_t unk_38;
+        uint32_t unk_3c;
+        uint32_t pad_40;
+        uint32_t pad_44;
+        uint32_t pad_48;
+        uint32_t pad_4c;
+        uint32_t unk_50;
+        uint32_t unk_54;
+        uint32_t pad_58;
+        uint32_t unk_5c;
+        uint32_t unk_60;
+        std::vector<df_matref*> materials;
+        std::vector<uint32_t> unk_74;
+        std::vector<df_job_actor*> actors;
+        std::vector<void*> unk_94;   // same size as materials?
     };
 
     struct df_creature
@@ -61,9 +147,9 @@
         uint16_t y;     // 92
         uint16_t z;     // 94
 
-        uint16_t unk_x96; // 96
-        uint16_t unk_y98; // 98
-        uint16_t unk_z9a; // 9a
+        int16_t unk_x96; // 96
+        int16_t unk_y98; // 98
+        int16_t unk_z9a; // 9a
 
         uint32_t unk_9c;
         uint16_t unk_a0;
@@ -174,7 +260,7 @@
         uint32_t unk_2e8;
         uint32_t unk_2ec;
         uint32_t unk_2f0;
-        uint32_t current_job;   // 2f4
+        df_job *current_job;   // 2f4
         uint32_t unk_2f8;
         uint32_t unk_2fc;
         uint32_t unk_300;
@@ -294,9 +380,9 @@
         std::vector<void*> unk_738;
         std::vector<void*> unk_748;
         uint16_t unk_758;
-        uint16_t unk_x75a;      // coords (-30000*3)
-        uint16_t unk_y75c;
-        uint16_t unk_z75e;
+        int16_t unk_x75a;      // coords (-30000*3)
+        int16_t unk_y75c;
+        int16_t unk_z75e;
         std::vector<uint16_t> unk_760;
         std::vector<uint16_t> unk_770;
         std::vector<uint16_t> unk_780;
