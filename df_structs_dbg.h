@@ -197,7 +197,7 @@ typedef struct df_soul
 	int32_t unk_84;
 	df_attrib mental[NUM_CREATURE_MENTAL_ATTRIBUTES];       // 88..1f3
 	vector(df_skill*) skills; // 1f4;
-	vector(void*) unk_204;     // pointers to 14 0x14-byte structures ... likes?
+	vector(void*) likes;
 	uint16_t traits[NUM_CREATURE_TRAITS];   // 214
 	vector(int16_t*) unk_250;  // 1 pointer to 2 shorts
 	vector(uint32_t) unk_260;
@@ -408,9 +408,9 @@ typedef struct df_creature
 	int16_t dest_z;        // ac
 	int16_t unk_ae;        // -1
 
-	vector(uint16_t) unk_b0;
-	vector(uint16_t) unk_c0;
-	vector(uint16_t) unk_d0;
+	vector(uint16_t) path_x;
+	vector(uint16_t) path_y;
+	vector(uint16_t) path_z;
 
 	t_creaturflags1 flags1;         // e0
 	t_creaturflags2 flags2;         // e4
