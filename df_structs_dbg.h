@@ -7,7 +7,7 @@ typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
 #endif
 
-#ifndef __cplusplus
+#ifdef __cplusplus
 
 #define vector(i) std::vector<i>
 
@@ -23,12 +23,13 @@ typedef struct string {
 	int capa;
 	int pad;
 } string;
+
 #else
 
 #define vector(i) struct { i* ptr; i* endptr; i* endalloc; }
 typedef struct string {
-	char* str_ptr;
-};
+	char* ptr;
+} string;
 
 #endif
 
@@ -371,9 +372,9 @@ typedef struct df_building
 	uint8_t unk_7c;
 	uint8_t pad_7d;
 	uint16_t pad_7e;
-	vector(df_building*) covered_buildings;	// other buildings inside the room
+	vector(struct df_building*) covered_buildings;	// other buildings inside the room
 	vector(uint32_t) unk_90;
-	df_creature *owner;	// a0
+	struct df_creature *owner;	// a0
 	vector(uint32_t) unk_a4;
 	string unk_b4;	// NOT the building name (bedroom -> n)
 	vector(uint32_t) unk_d0;
