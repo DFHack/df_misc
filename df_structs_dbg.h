@@ -389,7 +389,7 @@ typedef struct df_creature
 	df_name name;   // 0
 	string custom_profession;  // 6c (MSVC)
 	uint16_t profession;     // 88
-	uint16_t pad_8a;
+	uint16_t profession_bis;	// 8a
 	uint32_t race;  // 8c
 	int16_t x;     // 90
 	int16_t y;     // 92
@@ -696,7 +696,7 @@ typedef struct df_creature
 	vector(uint32_t) unk_908;	// 238*?
 
 	int32_t unk_918;
-	uint16_t unk_91c;
+	uint16_t unk_91c;	// 91c..922 uninitialized on linux
 	uint16_t unk_91e;
 	uint16_t unk_920;
 	uint16_t unk_922;
