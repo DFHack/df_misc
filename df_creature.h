@@ -1,3 +1,4 @@
+#if 0
     // XXX 102 is wrong, with that much there is no space for the std::vector coming after that
     // max = 96
 #ifdef NUM_CREATURE_LABORS
@@ -441,6 +442,7 @@
         uint32_t unk_93c;
     };
 
+#endif
 
 
     struct df_creature_mat_caract {

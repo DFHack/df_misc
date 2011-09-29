@@ -60,7 +60,7 @@ DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand>
     r_thread = new thread(df_rubythread, 0);
 
     while (r_type != RB_IDLE)
-	    this_thread::yield();
+        this_thread::yield();
 
     m_irun->lock();
 
@@ -75,6 +75,10 @@ DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand>
 
     commands.push_back(PluginCommand("rb_eval",
                 "Ruby interpreter. Eval() a ruby string.",
+                df_rubyeval));
+
+    commands.push_back(PluginCommand("r",
+                "Ruby interpreter dev. Eval() a ruby string.",
                 df_rubyeval));
 
     return CR_OK;
@@ -123,7 +127,7 @@ static command_result df_rubyload(Core * c, vector <string> & parameters)
 
     // could use a condition_variable or something...
     while (r_type != RB_IDLE)
-	    this_thread::yield();
+        this_thread::yield();
     // XXX non-atomic with previous r_type change check
     ret = r_result;
 
@@ -144,11 +148,14 @@ static command_result df_rubyeval(Core * c, vector <string> & parameters)
     }
 
     string full = "";
+    full += "DFHack.puts((";
 
     for (unsigned i=0 ; i<parameters.size() ; ++i) {
         full += parameters[i];
         full += " ";
     }
+
+    full += ").inspect)";
 
     m_mutex->lock();
     if (!r_thread)
@@ -159,7 +166,7 @@ static command_result df_rubyeval(Core * c, vector <string> & parameters)
     m_irun->unlock();
 
     while (r_type != RB_IDLE)
-	    this_thread::yield();
+        this_thread::yield();
 
     ret = r_result;
 
@@ -352,6 +359,17 @@ static VALUE rb_dfmemwrite(VALUE self, VALUE addr, VALUE raw)
 
     memcpy((void*)rb_num2ulong(addr), rb_string_value_ptr(&raw), strlen);
 
+    return Qtrue;
+}
+
+static VALUE rb_dfmalloc(VALUE self, VALUE len)
+{
+    return rb_uint2inum((long)malloc(FIX2INT(len)));
+}
+
+static VALUE rb_dffree(VALUE self, VALUE ptr)
+{
+    free((void*)rb_num2ulong(ptr));
     return Qtrue;
 }
 
@@ -931,19 +949,33 @@ static VALUE rb_creaskillsset(VALUE self, VALUE tt)
     return Qtrue;
 }
 
-    NUMERIC_ACCESSOR(crearace, df_creature, race)
-    NUMERIC_ACCESSOR(creaid, df_creature, id)
+NUMERIC_ACCESSOR(crearace, df_creature, race)
+NUMERIC_ACCESSOR(creaid, df_creature, id)
 NUMERIC_ACCESSOR(creaciv, df_creature, civ)
 
-    NUMERIC_ACCESSOR(creaflags1, df_creature, flags1.whole)
-    NUMERIC_ACCESSOR(creaflags2, df_creature, flags2.whole)
+NUMERIC_ACCESSOR(creaflags1, df_creature, flags1.whole)
+NUMERIC_ACCESSOR(creaflags2, df_creature, flags2.whole)
 NUMERIC_ACCESSOR(creaflags3, df_creature, flags3.whole)
 
 NUMERIC_ACCESSOR(creamood, df_creature, mood)
 
-    NUMERIC_ACCESSOR(creasex, df_creature, sex)
-    NUMERIC_ACCESSOR(creacaste, df_creature, caste)
-    NUMERIC_ACCESSOR(creapregtimer, df_creature, pregnancy_timer)
+NUMERIC_ACCESSOR(creasex, df_creature, sex)
+NUMERIC_ACCESSOR(creacaste, df_creature, caste)
+NUMERIC_ACCESSOR(creapregtimer, df_creature, pregnancy_timer)
+
+static VALUE rb_creapregptr(VALUE self) {
+    df_creature *var;
+    Data_Get_Struct(self, df_creature, var);
+    return rb_uint2inum((uint32_t)var->pregnancy_ptr);
+}
+
+static VALUE rb_creapregptrset(VALUE self, VALUE val) {
+    df_creature *var;
+    Data_Get_Struct(self, df_creature, var);
+    var->pregnancy_ptr = (void*)rb_num2ulong(val);
+    return Qtrue;
+}
+
 NUMERIC_ACCESSOR(creagraspimpair, df_creature, able_grasp_impair)
 
 
@@ -998,6 +1030,8 @@ static void ruby_dfhack_bind(void) {
     rb_define_singleton_method(rb_cDFHack, "print_err", RUBY_METHOD_FUNC(rb_dfprint_err), 1);
     rb_define_singleton_method(rb_cDFHack, "memread", RUBY_METHOD_FUNC(rb_dfmemread), 2);
     rb_define_singleton_method(rb_cDFHack, "memwrite", RUBY_METHOD_FUNC(rb_dfmemwrite), 2);
+    rb_define_singleton_method(rb_cDFHack, "malloc", RUBY_METHOD_FUNC(rb_dfmalloc), 1);
+    rb_define_singleton_method(rb_cDFHack, "free", RUBY_METHOD_FUNC(rb_dffree), 1);
     rb_define_singleton_method(rb_cDFHack, "vectorat", RUBY_METHOD_FUNC(rb_dfvectorat), 2);
     rb_define_singleton_method(rb_cDFHack, "readstring", RUBY_METHOD_FUNC(rb_dfreadstring), 1);
     rb_define_singleton_method(rb_cDFHack, "getaddress", RUBY_METHOD_FUNC(rb_dfgetaddress), 2);
@@ -1076,6 +1110,7 @@ static void ruby_dfhack_bind(void) {
     ACCESSOR(rb_cCreature, "sex", creasex);
     ACCESSOR(rb_cCreature, "caste", creacaste);
     ACCESSOR(rb_cCreature, "pregnancy_timer", creapregtimer);
+    ACCESSOR(rb_cCreature, "pregnancy_ptr", creapregptr);
     ACCESSOR(rb_cCreature, "able_grasp_impaired", creagraspimpair);
 
     rb_cMatCreature = rb_define_class_under(rb_cDFHack, "MatCreature", rb_cWrapData);
