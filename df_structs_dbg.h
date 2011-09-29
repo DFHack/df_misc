@@ -264,7 +264,7 @@ typedef struct df_job
 	int16_t z;
 	int16_t pad_16;
 	int32_t counter;	// 18, job done when reach -1, decremented on df_creature:job_counter
-	uint32_t unk_1c;
+	void* unk_1c;
 	uint32_t unk_20;
 	int16_t unk_24;
 	int32_t unk_28;
@@ -384,6 +384,13 @@ typedef struct df_building
 	// possibly other stuff
 } df_building;
 
+typedef struct df_unk_evt {
+	uint16_t type;	// 13 => sober_since: "he needs alcohol to get through the working day" (value=age), 15 => death_seen: "getting used to tragedy" (value=degree)
+	uint16_t unk_2;
+	uint32_t value;	// may be decremented/incremented every tick (depends on the type)
+			// if decrements, evt is deleted at 0
+} df_unk_evt;
+
 typedef struct df_creature
 {
 	df_name name;   // 0
@@ -475,7 +482,7 @@ typedef struct df_creature
 	uint32_t pregnancy_timer;       // 214
 	void* pregnancy_ptr;    // 218
 	int32_t unk_21c;
-	uint32_t unk_220;
+	void* unk_220;	// set on ghost?
 	uint32_t birth_year;    // 224
 	uint32_t birth_time;    // 228
 	uint32_t unk_22c;
@@ -578,18 +585,15 @@ typedef struct df_creature
 	uint16_t unk_528;
 	uint16_t pad_52a;
 	vector(uint32_t) appearance;        // 52c
-	int16_t unk_53c;
-	int16_t unk_53e;
-	int16_t job_counter;	// 540 current_job unit/walk done when reach -1, decremented every tick
-	int16_t unk_542;
-	int16_t unk_544;
-	int16_t unk_546;
+	int32_t think_counter;	// 53c decrements every job_counter reroll, set when changing jobs
+	int32_t job_counter;	// 540 current_job unit/walk done when reach -1, decremented every tick
+	int32_t unk_544;	// if set, decrements every job_counter reroll
 	int16_t unk_548;
-	int16_t unk_54a;
-	int16_t unk_54c;
-	int16_t unk_54e;
+	int16_t winded;
+	int16_t stunned;	// 54c decrements every tick, unstun at 0
+	int16_t unconscious;
 	int16_t unk_550;
-	int16_t unk_552;
+	int16_t webbed;
 	int16_t unk_x554;       // coords ? (-30.000x3)
 	int16_t unk_y556;
 	int16_t unk_z558;
@@ -606,7 +610,7 @@ typedef struct df_creature
 	uint32_t unk_574;
 	uint32_t unk_578;
 	uint32_t unk_57c;
-	uint32_t unk_580;	// fluctuates a lot
+	uint32_t unk_580;	// fluctuates a lot, temperature?
 	uint32_t unk_584;	// fluctuate
 	uint32_t unk_588;	// fluctuate
 	uint32_t unk_58c;	// counter, decrement to 0
@@ -615,7 +619,7 @@ typedef struct df_creature
 	uint32_t unk_598;	// fluctuate
 	uint32_t unk_59c;
 
-	vector(void*) unk_5a0;
+	vector(df_unk_evt*) unk_5a0;	// recent events ? character traits ?
 	vector(uint32_t)* unk_5b0;	// pointer to 12 vectors (uint32 and uint16)
 	uint32_t unk_5b4;       // 0x3e8 (1000)
 	uint32_t unk_5b8;       // 0x3e8 (1000)
@@ -632,7 +636,7 @@ typedef struct df_creature
 	uint16_t pad_6ce;
 
 	vector(uint32_t) unk_6d0;
-	vector(uint32_t) unk_6e0;
+	vector(uint32_t) unk_6e0;	// item ids?
 	vector(void*) unk_6f0;
 	vector(uint32_t) unk_700;
 	uint32_t happiness;     // 710
@@ -683,7 +687,7 @@ typedef struct df_creature
 	vector(uint32_t) unk_850;
 	vector(uint32_t) unk_860;
 	uint32_t unk_870;
-	uint32_t unk_874;	// age ? increments quickly
+	uint32_t unk_874;	// age ? incremented every tick
 	vector(uint8_t) unk_878;
 	vector(uint8_t) unk_888;
 	vector(uint32_t) unk_898;	// 87*0
