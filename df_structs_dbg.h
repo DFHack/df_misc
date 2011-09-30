@@ -228,6 +228,8 @@ typedef struct df_item {	// item_woodst etc
 	vector(void*) refs;	// general_ref_building_holderst
 				// general_ref_unit_ownerst
 	// more uints here (type-specific?)
+
+	// vector(df_contaminant*) *unk_64;
 } df_item;
 
 typedef struct df_job_link
@@ -390,6 +392,19 @@ typedef struct df_unk_evt {
 	uint32_t value;	// may be decremented/incremented every tick (depends on the type)
 			// if decrements, evt is deleted at 0
 } df_unk_evt;
+
+typedef struct df_unit_spatter {
+	uint16_t material_type;
+	uint16_t pad_2;
+	int32_t material_subtype;
+	int16_t material_state;	// 0=frozen 1=liquid 2=gas 3=powder 4=paste 5=pressed
+	int16_t temperature;
+	int16_t unk_c;
+	int16_t pad_e;
+	int32_t quantity;
+	int16_t bodypart_idx;
+	int16_t unk_16;	// body_plan_index ? cant find stuff if != 1 on a dwarf
+} df_unit_spatter;
 
 typedef struct df_creature
 {
@@ -570,7 +585,7 @@ typedef struct df_creature
 	uint32_t blood_max;
 	uint32_t blood_count;   // 490
 	uint32_t unk_494;
-	vector(void*) unk_498;
+	vector(df_unit_spatter*) unk_498;
 	vector(uint16_t) unk_4a8;
 	vector(uint16_t) unk_4b8;
 	uint32_t unk_4c8;
