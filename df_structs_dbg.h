@@ -209,11 +209,11 @@ typedef struct df_reference {
 	uint32_t id;
 } df_reference;
 
-typedef struct df_taskref {
+typedef struct df_jobref {
 	uint32_t unk_0;
 	struct df_job* task;
 	uint32_t unk_8;
-} df_taskref;
+} df_jobref;
 
 typedef struct df_item {	// item_woodst etc
 	void *vtable;
@@ -224,7 +224,7 @@ typedef struct df_item {	// item_woodst etc
 	uint32_t flags;
 	uint32_t unk_10;
 	uint32_t unk_14;
-	vector(df_taskref*) inuse;
+	vector(df_jobref*) inuse;
 	vector(void*) refs;	// general_ref_building_holderst
 				// general_ref_unit_ownerst
 	// more uints here (type-specific?)
@@ -254,43 +254,69 @@ typedef struct df_item_wrap
 	uint32_t unk_c;
 } df_item_wrap;
 
+typedef struct df_job_unk94
+{
+	int16_t unk_0;
+	int16_t unk_2;
+	int16_t unk_4;
+	int16_t pad_6;
+	uint32_t unk_8;
+	uint32_t unk_c;
+	uint32_t unk_10;
+	uint16_t unk_14;
+	int16_t pad_16;
+	uint32_t unk_18;
+	uint32_t unk_1c;
+	uint32_t unk_20;
+	uint32_t unk_24;
+	int32_t unk_28;
+	string unk_2c;
+	string unk_48;
+	int32_t unk_64;
+	int32_t unk_68;
+	vector(uint32_t) unk_6c;
+	int32_t unk_7c;
+	int16_t unk_80;
+	int16_t pad_82;
+} df_job_unk94;
+
 typedef struct df_job
 {
 	uint32_t job_id;
 	df_job_link* job_links;
-	int16_t unk_8;
+	int16_t job_type;	// 8: 73 = construct rock coffin, 81 = construct rock block
 	int16_t pad_a;
 	int32_t unk_c;
 	int16_t x;
 	int16_t y;
 	int16_t z;
 	int16_t pad_16;
-	int32_t counter;	// 18, job done when reach -1, decremented on df_creature:job_counter
+	int32_t counter;	// 18: job done when reach -1, decremented on df_creature:job_counter
 	void* unk_1c;
-	uint32_t unk_20;
+	struct {
+		uint32_t repeat:1;
+		uint32_t suspended:1;
+		uint32_t unk_4:1;
+		uint32_t active:1;	// ?
+		uint32_t unk:28;
+	} flags;	// 20
 	int16_t unk_24;
+	int16_t pad_26;
 	int32_t unk_28;
 	int16_t unk_2c;
 	int16_t unk_2e;
 	int16_t unk_30;
+	int16_t pad_32;
 	uint32_t unk_34;
 	int32_t unk_38;
 	uint32_t unk_3c;
-	uint8_t unk_40;
-	uint8_t pad_41;
-	uint16_t pad_42;
-	uint32_t pad_44;
-	uint32_t pad_48;
-	uint32_t pad_4c;
-	uint32_t unk_50;
-	uint32_t unk_54;
-	uint32_t pad_58;
+	string unk_40;
 	uint32_t unk_5c;
 	uint32_t unk_60;
 	vector(df_item_wrap*) materials;
 	vector(uint32_t) unk_74;
 	vector(df_job_actor*) actors;
-	vector(void*) unk_94;	// same size as materials?
+	vector(df_job_unk94*) unk_94;
 } df_job;
 
 typedef struct df_relationship
@@ -368,14 +394,14 @@ typedef struct df_building
 	uint16_t unk_44;
 	uint16_t pad_46;
 	uint32_t unk_48;
-	vector(uint32_t) unk_4c;
+	vector(df_job*) tasks;	// 4c: construct rock bed etc
 	vector(uint32_t) unk_5c;
 	vector(uint32_t) unk_6c;
 	uint8_t unk_7c;
 	uint8_t pad_7d;
 	uint16_t pad_7e;
 	vector(struct df_building*) covered_buildings;	// other buildings inside the room
-	vector(uint32_t) unk_90;
+	vector(struct df_building*) associated_buildings;	// eg chair -> table
 	struct df_creature *owner;	// a0
 	vector(uint32_t) unk_a4;
 	string unk_b4;	// NOT the building name (bedroom -> n)
@@ -383,15 +409,71 @@ typedef struct df_building
 	uint16_t unk_e0;
 	uint16_t pad_e2;
 	vector(void*) items;	// similar to df_item_wrap: struct { df_item* item; uint16_t unk_4; }
-	// possibly other stuff
+	uint32_t unk_f4;
+	// end of base generic class (may end earlier?)
 } df_building;
 
-typedef struct df_unk_evt {
+struct building_doorst {
+	struct df_building b;
+
+	struct {
+		uint32_t forbid_passage:1;
+		uint32_t external:1;
+		uint32_t taken_by_invaders:1;
+		uint32_t used_by_intruder:1;
+		uint32_t closed:1;	// currently open/closed
+		uint32_t operated_by_mechanism:1;
+		uint32_t pet_passable:1;
+		uint32_t unk:25;
+	} flags;	// f8
+};
+
+struct building_farmplotst {
+	struct df_building b;
+
+	uint16_t plantation_program[4];	// per season ; 40 = plump helmet, -1 = nothing
+	uint32_t unk_100;
+	struct {
+		uint32_t season_fert:1;
+		uint32_t unk:31;
+	} flags;	// 104
+	uint8_t unk_108;
+	uint8_t pad_109;
+	uint16_t pad_10a;
+	uint32_t unk_10c;
+	uint32_t unk_110;
+	uint16_t unk_114;
+};
+
+struct building_workshopst {
+	struct df_building b;
+
+	uint16_t workshop_type;	// 2 => masonry
+	vector(uint32_t) workshop_profile_ids;	// vector of df_creature id
+	uint32_t workshop_profile_minproficiency;
+	uint32_t workshop_profile_maxproficiency;	// when set, between 0-15 ; when unset =3000
+	int32_t unk_114;	// -1
+	int32_t unk_118;	// 0
+	int32_t unk_11c;	// -1
+};
+
+struct building_tradedepotst {
+	struct df_building b;
+
+	struct {
+		uint32_t trader_requested:1;
+		uint32_t anyone_may_trade:1;
+		uint32_t unk:30;
+	} flags;	// f8
+	uint32_t pad_fc;
+};
+
+typedef struct df_unit_unk_evt {
 	uint16_t type;	// 13 => sober_since: "he needs alcohol to get through the working day" (value=age), 15 => death_seen: "getting used to tragedy" (value=degree)
 	uint16_t unk_2;
 	uint32_t value;	// may be decremented/incremented every tick (depends on the type)
 			// if decrements, evt is deleted at 0
-} df_unk_evt;
+} df_unit_unk_evt;
 
 typedef struct df_unit_spatter {
 	uint16_t material_type;
@@ -570,7 +652,7 @@ typedef struct df_creature
 	int32_t unk_3b8;
 	int32_t unk_3bc;
 	int32_t unk_3c0;
-	vector(df_body_part*)* body_plan;	// points into a giant chunk, raws?
+	void *body_plan;	// vector(df_body_part*)* body_plan;	// points into a giant chunk, raws?
 	uint16_t unk_3c8;
 	uint16_t pad_3ca;
 
@@ -634,8 +716,8 @@ typedef struct df_creature
 	uint32_t unk_598;	// fluctuate
 	uint32_t unk_59c;
 
-	vector(df_unk_evt*) unk_5a0;	// recent events ? character traits ?
-	vector(uint32_t)* unk_5b0;	// pointer to 12 vectors (uint32 and uint16)
+	vector(df_unit_unk_evt*) unk_5a0;	// recent events ? character traits ?
+	void* unk_5b0;	//vector(uint32_t)* unk_5b0;	// pointer to 12 vectors (uint32 and uint16)
 	uint32_t unk_5b4;       // 0x3e8 (1000)
 	uint32_t unk_5b8;       // 0x3e8 (1000)
 	vector(uint32_t) unk_5bc;
