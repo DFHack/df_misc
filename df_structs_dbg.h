@@ -225,12 +225,52 @@ typedef struct df_item {	// item_woodst etc
 	uint32_t unk_10;
 	uint32_t unk_14;
 	vector(df_jobref*) inuse;
-	vector(void*) refs;	// general_ref_building_holderst
-				// general_ref_unit_ownerst
-	// more uints here (type-specific?)
+	vector(void*) refs;	// general_ref_building_holderst, general_ref_unit_ownerst, general_ref_contained_in_itemst, ...
 
-	// vector(df_contaminant*) *unk_64;
+	uint16_t unk_38;	// material info ?
+	uint16_t pad_3a;
+	uint32_t pad_3c;
+	uint16_t pad_40;
+	uint16_t unk_42;
+
+	uint16_t unk_44;
+	uint16_t unk_46;
+	uint16_t unk_48;	// 60000 * 4
+	uint16_t unk_4a;
+	uint16_t unk_4c;
+	uint16_t unk_4e;
+
+	uint32_t unk_50;
+	uint32_t unk_54;
+	uint32_t stack_size;	// 58
+	uint32_t unk_5c;
+	uint32_t unk_60;
+	void *splatter;		// 64: vector(df_contaminant*)
+	
+	// XXX is this still in the base class ?
+	uint16_t unk_68;	// material info ?
+	uint16_t unk_6a;
+	uint16_t unk_6c;
+	uint16_t pad_6e;
+	uint32_t unk_70;
+	
+	uint32_t unk_74;
+	uint32_t unk_78;
+	uint32_t unk_7c;
 } df_item;
+
+struct item_seedsst {
+	df_item i;
+
+	uint32_t age;	// 80: determite growth state
+	uint32_t unk_84;
+};
+
+struct item_plantst {
+	df_item i;
+
+	uint32_t age;	// 80: determine withered state
+};
 
 typedef struct df_job_link
 {
