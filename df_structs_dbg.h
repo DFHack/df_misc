@@ -323,7 +323,7 @@ typedef struct df_relationship
 {
 	uint32_t creature_id;
 	uint32_t unk_4;	// 30
-	uint32_t unk_8;	// 0x118
+	uint32_t last_seen;	// ?  increments every job_counter loop
 	uint32_t type:2;	// 0=longterm acquaintance, 1=friend, 2=grudge, 3=friend
 } df_relationship;
 
@@ -488,6 +488,15 @@ typedef struct df_unit_spatter {
 	int16_t unk_16;	// body_plan_index ? cant find stuff if != 1 on a dwarf
 } df_unit_spatter;
 
+typedef struct df_creature_pregnancy {
+	uint8_t *unk_0;
+	uint16_t size_of_unk0;	// dwarf: 32 uint8
+	uint16_t pad_6;
+	uint16_t *unk_8;
+	uint16_t size_of_unk8; // dwarf: 10 uint16
+	uint16_t pad_e;
+} df_creature_pregnancy;
+
 typedef struct df_creature
 {
 	df_name name;   // 0
@@ -577,7 +586,7 @@ typedef struct df_creature
 	int16_t mood;           // 210
 	uint16_t unk_212;
 	uint32_t pregnancy_timer;       // 214
-	void* pregnancy_ptr;    // 218
+	df_creature_pregnancy* pregnancy_ptr;    // 218
 	int32_t unk_21c;
 	void* unk_220;	// set on ghost?
 	uint32_t birth_year;    // 224
@@ -622,7 +631,7 @@ typedef struct df_creature
 	uint32_t unk_2e8;
 	uint16_t unk_2ec;
 	uint16_t unk_2ee;
-	uint16_t unk_2f0;	// increments every tick
+	uint16_t unk_2f0_cntr;	// increments every tick
 	uint16_t pad_2f2;
 	df_job * current_job;   // 2f4
 	uint16_t unk_2f8;
@@ -667,7 +676,7 @@ typedef struct df_creature
 	uint32_t blood_max;
 	uint32_t blood_count;   // 490
 	uint32_t unk_494;
-	vector(df_unit_spatter*) unk_498;
+	vector(df_unit_spatter*) spatters;
 	vector(uint16_t) unk_4a8;
 	vector(uint16_t) unk_4b8;
 	uint32_t unk_4c8;
@@ -716,7 +725,7 @@ typedef struct df_creature
 	uint32_t unk_598;	// fluctuate
 	uint32_t unk_59c;
 
-	vector(df_unit_unk_evt*) unk_5a0;	// recent events ? character traits ?
+	vector(df_unit_unk_evt*) unk_5a0_recent_events;	// recent events ? character traits ?
 	void* unk_5b0;	//vector(uint32_t)* unk_5b0;	// pointer to 12 vectors (uint32 and uint16)
 	uint32_t unk_5b4;       // 0x3e8 (1000)
 	uint32_t unk_5b8;       // 0x3e8 (1000)
@@ -784,7 +793,7 @@ typedef struct df_creature
 	vector(uint32_t) unk_850;
 	vector(uint32_t) unk_860;
 	uint32_t unk_870;
-	uint32_t unk_874;	// age ? incremented every tick
+	uint32_t unk_874_cntr;	// age ? incremented every tick
 	vector(uint8_t) unk_878;
 	vector(uint8_t) unk_888;
 	vector(uint32_t) unk_898;	// 87*0
