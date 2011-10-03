@@ -515,6 +515,17 @@ typedef struct df_unit_unk_evt {
 			// if decrements, evt is deleted at 0
 } df_unit_unk_evt;
 
+typedef struct df_unit_recentevent {
+	uint16_t type;
+	uint16_t pad_2;
+	uint32_t age;	// tick count
+	int32_t type_param1;	// type=128 (admired a) p1=what (0=seat, 1=bed..)
+	uint32_t type_param2;	// type=128 p2=quality (0..50=fine, 150=very fine, 15000=completely sublime)
+	uint16_t unk_10;	// set for 'admired a very fine well' / 'made a friend'
+	uint16_t unk_12;	// set for 'admired fine well'
+} df_unit_recentevent;
+
+
 typedef struct df_unit_spatter {
 	uint16_t material_type;
 	uint16_t pad_2;
@@ -555,7 +566,8 @@ typedef struct df_creature
 	uint32_t unk_9c;
 	int16_t unk_a0;
 	uint16_t pad_a2;
-	uint32_t unk_a4;
+	uint16_t unk_a4;
+	uint16_t unk_a6;
 
 	int16_t dest_x;        // a8
 	int16_t dest_y;        // aa
@@ -594,12 +606,12 @@ typedef struct df_creature
 	uint32_t unk_144;
 
 	vector(void*) unk_148;
-	vector(df_reference*) nemesis;	// dwarves have a vector of 1 entry of general_ref_is_nemesisst with their own creature_id
+	vector(df_reference*) nemesis;	// dwarves have a vector of 1 entry of general_ref_is_nemesisst with their own creature_id 	XXX mmh, in fact no
 
-	int32_t unk_168;
-	int32_t unk_16c;
+	int32_t squad_index;	// 168: which squad is this dwarf in?
+	int32_t squad_position;	// 16c: order inside the squad
 	uint32_t unk_170;
-	uint32_t unk_174;
+	uint32_t draft_timer;	// increments every tick while on duty/carrying order?
 	uint16_t unk_178;
 	uint16_t pad_17a;
 
@@ -608,7 +620,7 @@ typedef struct df_creature
 	vector(uint32_t) unk_19c;
 	vector(uint32_t) unk_1ac;
 	uint32_t pickup_equipment_bit;  // 1bc
-	vector(uint32_t) unk_1c0;
+	vector(uint32_t) unk_1c0;	// 1c0/1d0: military/civ inventory?
 	vector(uint32_t) unk_1d0;
 	vector(uint32_t) unk_1e0;
 
@@ -620,32 +632,33 @@ typedef struct df_creature
 	int32_t unk_200;
 	int16_t unk_204;
 	uint16_t pad_206;
-	uint32_t unk_208;
+	uint32_t unk_208;	// damage/fleeing? (hunted creature hit)
 	uint32_t unk_20c;
 
 	int16_t mood;           // 210
 	uint16_t unk_212;
 	uint32_t pregnancy_timer;       // 214
 	df_creature_pregnancy* pregnancy_ptr;    // 218
-	int32_t unk_21c;
+	int16_t unk_21c;
+	int16_t unk_21e;
 	void* unk_220;	// set on ghost?
 	uint32_t birth_year;    // 224
 	uint32_t birth_time;    // 228
 	uint32_t unk_22c;
 	uint32_t unk_230;
-	uint32_t unk_234;
+	struct df_creature* following;	// try to get on the same pos as this creature
 	uint16_t unk_238;
 	uint16_t pad_23a;
 	int32_t unk_23c;
-	int32_t unk_240;
-	int32_t unk_244;
-	int32_t unk_248;
+	int32_t married_id;	// 240: not used in relationship screen..
+	int32_t mother_id;	// 244: idem
+	int32_t father_id;	// 248: idem
 	int32_t unk_24c;
 	int32_t unk_250;
 	int32_t unk_254;
 	int32_t unk_258;
-	int32_t unk_25c;
-	int32_t unk_260;
+	int32_t unk_25c_mother;	// mother id again?
+	int32_t lover_id;
 	int16_t unk_264;
 	int16_t pad_266;
 	int32_t unk_268;
@@ -666,9 +679,10 @@ typedef struct df_creature
 
 	uint32_t unk_2d8;
 	uint32_t unk_2dc;
-	uint32_t unk_2e0;
+	struct df_creature *hunt_target;	// 2e0
 	uint32_t unk_2e4;
-	uint32_t unk_2e8;
+	int16_t unk_2e8;	// fight related
+	int16_t unk_2ea;	// fight related
 	uint16_t unk_2ec;
 	uint16_t unk_2ee;
 	uint16_t unk_2f0_cntr;	// increments every tick
@@ -783,7 +797,7 @@ typedef struct df_creature
 
 	vector(uint32_t) unk_6d0;
 	vector(uint32_t) unk_6e0;	// item ids?
-	vector(void*) unk_6f0;
+	vector(df_unit_recentevent*) recent_events;	// 6f0: dined in a legendary dinning room, etc
 	vector(uint32_t) unk_700;
 	uint32_t happiness;     // 710
 	uint16_t unk_714;
@@ -817,7 +831,7 @@ typedef struct df_creature
 	vector(uint32_t) unk_7c4;
 	vector(uint32_t) unk_7d4;
 	vector(uint32_t) unk_7e4;
-	vector(uint32_t) unk_7f4;
+	vector(uint32_t) unk_7f4;	// combat log?
 	vector(uint32_t) unk_804;
 	vector(uint32_t) unk_814;
 
@@ -841,8 +855,8 @@ typedef struct df_creature
 	vector(uint16_t) unk_8b8;	// 87*?
 	vector(uint16_t) unk_8c8;
 	vector(uint16_t) unk_8d8;
-	vector(uint32_t) unk_8e8;
-	vector(uint32_t) unk_8f8;
+	vector(uint32_t) unk_8e8;	// items ids?
+	vector(uint16_t) unk_8f8;	// same size as 8e8, soldier related?
 	vector(uint32_t) unk_908;	// 238*?
 
 	int32_t unk_918;
