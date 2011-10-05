@@ -48,8 +48,8 @@ DFhackCExport command_result plugin_onupdate ( Core * c )
     //c->Suspend(); // will deadlock in onupdate
     for (unsigned i=0 ; i<v->size() ; ++i) {
         cre = v->at(i);
-        if (cre->race == 241 && cre->current_job && cre->job_counter > 1)
-            cre->job_counter = 1;
+        if (cre->race == 241 && cre->job_counter > 0)
+            cre->job_counter = 0;
 	// could also patch the cre->current_job->counter
     }
     //c->Resume();
