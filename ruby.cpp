@@ -44,6 +44,7 @@ static RB_command r_type;
 static const char *r_command;
 static command_result r_result;
 static thread *r_thread;
+static int onupdate_active;
 
 // dfhack interface
 DFhackCExport const char * plugin_name ( void )
@@ -66,6 +67,8 @@ DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand>
 
     if (r_result == CR_FAILURE)
         return CR_FAILURE;
+
+    onupdate_active = 0;
 
     commands.clear();
 
@@ -103,6 +106,32 @@ DFhackCExport command_result plugin_shutdown ( Core * c )
     delete m_mutex;
 
     return CR_OK;
+}
+
+DFhackCExport command_result plugin_onupdate ( Core * c )
+{
+    if (!onupdate_active)
+        return CR_OK;
+
+    command_result ret;
+
+    m_mutex->lock();
+    if (!r_thread)
+        return CR_OK;
+
+    r_type = RB_EVAL;
+    r_command = "DFHack.onupdate";
+    m_irun->unlock();
+
+    while (r_type != RB_IDLE)
+        this_thread::yield();
+
+    ret = r_result;
+
+    m_irun->lock();
+    m_mutex->unlock();
+
+    return ret;
 }
 
 static command_result df_rubyload(Core * c, vector <string> & parameters)
@@ -314,6 +343,21 @@ static VALUE df_newcoord(int x, int y, int z)
 
 
 // DFHack methods
+// enable/disable DFHack.onupdate() every tick
+static VALUE rb_dfonupdateactive(VALUE self)
+{
+    if (onupdate_active)
+        return Qtrue;
+    else
+        return Qfalse;
+}
+
+static VALUE rb_dfonupdateactiveset(VALUE self, VALUE val)
+{
+    onupdate_active = (val == Qtrue || val == INT2FIX(1)) ? 1 : 0;
+    return Qtrue;
+}
+
 static VALUE rb_dfresume(VALUE self)
 {
     getcore().Resume();
@@ -1023,6 +1067,9 @@ static VALUE rb_matorgname(VALUE self)
 static void ruby_dfhack_bind(void) {
     rb_cDFHack = rb_define_module("DFHack");
 
+    rb_define_singleton_method(rb_cDFHack, "onupdate_active", RUBY_METHOD_FUNC(rb_dfonupdateactive), 0);
+    rb_define_singleton_method(rb_cDFHack, "onupdate_active=", RUBY_METHOD_FUNC(rb_dfonupdateactiveset), 1);
+    rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
     rb_define_singleton_method(rb_cDFHack, "suspendraw", RUBY_METHOD_FUNC(rb_dfsuspend), 0);
     rb_define_singleton_method(rb_cDFHack, "resume", RUBY_METHOD_FUNC(rb_dfresume), 0);
     rb_define_singleton_method(rb_cDFHack, "version", RUBY_METHOD_FUNC(rb_dfgetversion), 0);
