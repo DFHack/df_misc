@@ -869,3 +869,109 @@ typedef struct df_creature
 	vector(uint16_t) unk_92c;
 	uint32_t unk_93c;
 } df_creature;
+
+
+
+typedef struct bitarray
+{
+	uint8_t *ptr;
+	uint32_t len;
+} bitarray;
+
+typedef struct df_block_square_event
+{
+	void *vtable;
+} df_block_square_event;
+
+struct block_square_event_mineralst
+{
+	df_block_square_event e;
+
+	uint32_t type;
+	uint16_t bitmap[16];	// [y] & (1<<x)
+};
+
+struct block_square_event_grassst
+{
+	df_block_square_event e;
+
+	uint32_t type;
+	uint8_t intensity[16*16];
+
+};
+
+struct block_square_event_material_spatterst
+{
+	df_block_square_event e;
+
+	uint16_t mat1;
+	uint16_t pad_6;
+	uint32_t mat2;
+	uint16_t matter_state;
+	uint8_t intensity[16*16];	// nopad
+	uint16_t unk_10e;	// 0x270f, temperature ?
+	uint16_t unk_110;	// 0x27c4, temperature ?
+};
+
+struct block_square_event_frozenliquidst	// XXX check name
+{
+	df_block_square_event e;
+
+	uint16_t original_type[16*16];
+};
+
+struct block_square_event_woldconstructionst	// XXX check name
+{
+	df_block_square_event e;
+
+	uint32_t type;
+	uint16_t bitmap[16];
+};
+
+typedef struct df_block
+{
+	bitarray flags;
+	vector(df_block_square_event*) block_events;
+
+	int32_t unk_18;
+	int32_t unk_1c;
+	int32_t unk_20;
+
+	int32_t local_feature;  // 24: local feature index
+	int32_t global_feature; // 28: global feature index
+	int32_t unk_2c;
+	int32_t unk_30;	// linux uninit
+	int32_t unk_34;
+	int32_t unk_38;
+
+	vector(uint32_t) items; // 3c: item ids present in the block
+	vector(void*) effects;	// 4c: dust/miasma
+	int32_t unk_50;
+	int32_t unk_54;	// linux uninit
+	vector(void*) plants;	// 58: vector(df_plant*)
+
+	int16_t map_x;	// 68
+	int16_t map_y;
+	int16_t map_z;
+	int16_t region_x;
+	int16_t region_y;	// 70
+
+	// XXX uint16_t pad_ here ?
+	uint16_t tiletype[16*16];	// 72/74
+	uint32_t designation[16*16];	// 
+	uint32_t occupancy[16*16];
+
+	uint8_t unk9[16*16];
+	uint32_t pathfinding[16*16];
+	uint16_t unk10[16*16];	// linux uninitialized
+	uint16_t unk11[16*16];
+	uint16_t unk12[16*16];
+
+	uint16_t temperature1[16*16];
+	uint16_t temperature2[16*16];
+
+	uint16_t unk13[16*16];
+	uint16_t unk14[16*16];
+
+	uint8_t region_offset[9];
+} df_block;
