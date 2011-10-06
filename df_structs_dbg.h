@@ -412,7 +412,6 @@ typedef struct df_body_part
 
 typedef struct df_building
 {
-	// derived from building_bedst / building_
 	void *vtable;
 	uint32_t x1;
 	uint32_t y1;
@@ -920,13 +919,33 @@ struct block_square_event_frozenliquidst	// XXX check name
 	uint16_t original_type[16*16];
 };
 
-struct block_square_event_woldconstructionst	// XXX check name
+struct block_square_event_worldconstructionst	// XXX check name
 {
 	df_block_square_event e;
 
 	uint32_t type;
 	uint16_t bitmap[16];
 };
+
+typedef struct df_block_effect
+{
+	uint32_t type;	// 0=miasma, 1-2=mist, 3=dust, 4=magma mist, 5=smoke, 6=dragonfire, 7=fire,
+			// 8=web, 9=boiling magma, a=magma vapor, b=ocean wave, c=sea foam
+	uint32_t unk_4;
+	
+	int16_t cntr;	// counter ? start at 100, -= 15 every 3 tick, set inactive at <=0
+	int16_t x;
+	int16_t y;
+	int16_t z;
+
+	int16_t unk_10;	// coords ?
+	int16_t unk_12;
+	int16_t unk_14;
+	int8_t unk_16;
+	int8_t inactive;	// bit 1 -> effect inhibited
+
+	int32_t unk_18;
+} df_block_effect;
 
 typedef struct df_block
 {
@@ -945,9 +964,9 @@ typedef struct df_block
 	int32_t unk_38;
 
 	vector(uint32_t) items; // 3c: item ids present in the block
-	vector(void*) effects;	// 4c: dust/miasma
-	int32_t unk_50;
-	int32_t unk_54;	// linux uninit
+	vector(df_block_effect*) effects;	// 4c: miasma/dust ; vector never shrink?
+	int32_t unk_50;	// count effects?
+	int32_t unk_54;
 	vector(void*) plants;	// 58: vector(df_plant*)
 
 	int16_t map_x;	// 68
@@ -956,15 +975,15 @@ typedef struct df_block
 	int16_t region_x;
 	int16_t region_y;	// 70
 
-	// XXX uint16_t pad_ here ?
-	uint16_t tiletype[16*16];	// 72/74
+	// uint16_t pad_72; ?
+	uint16_t tiletype[16*16];	// 72
 	uint32_t designation[16*16];	// 
 	uint32_t occupancy[16*16];
 
 	uint8_t unk9[16*16];
 	uint32_t pathfinding[16*16];
-	uint16_t unk10[16*16];	// linux uninitialized
-	uint16_t unk11[16*16];
+	uint16_t pathfinding2[16*16];
+	uint16_t pathfinding3[16*16];
 	uint16_t unk12[16*16];
 
 	uint16_t temperature1[16*16];
