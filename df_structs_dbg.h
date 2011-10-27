@@ -222,8 +222,8 @@ typedef struct df_item {	// item_woodst etc
 	int16_t z;
 	int16_t pad_a;
 	uint32_t flags;
-	uint32_t unk_10;
-	uint32_t unk_14;
+	uint32_t age;
+	uint32_t id;
 	vector(df_jobref*) inuse;
 	vector(void*) refs;	// general_ref_building_holderst, general_ref_unit_ownerst, general_ref_contained_in_itemst, ...
 
@@ -258,6 +258,14 @@ typedef struct df_item {	// item_woodst etc
 	uint32_t unk_78;
 	uint32_t unk_7c;
 } df_item;
+
+struct item_drinkst {
+	df_item i;
+
+	uint16_t material;
+	uint16_t pad;
+	uint32_t material_idx;
+};
 
 struct item_seedsst {
 	df_item i;
