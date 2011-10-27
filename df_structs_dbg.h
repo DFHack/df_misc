@@ -229,7 +229,7 @@ typedef struct df_item {	// item_woodst etc
 
 	uint16_t unk_38;	// material info ?
 	uint16_t pad_3a;
-	uint32_t pad_3c;
+	uint32_t unk_3c;
 	uint16_t pad_40;
 	uint16_t unk_42;
 
@@ -247,9 +247,8 @@ typedef struct df_item {	// item_woodst etc
 	uint32_t unk_60;
 	void *splatter;		// 64: vector(df_contaminant*)
 	
-	// XXX is this still in the base class ?
-	uint16_t unk_68;	// material info ?
-	uint16_t unk_6a;
+	uint16_t temperature;
+	uint16_t temperature_fraction;
 	uint16_t unk_6c;
 	uint16_t pad_6e;
 	uint32_t unk_70;
@@ -278,6 +277,51 @@ struct item_plantst {
 	df_item i;
 
 	uint32_t age;	// 80: determine withered state
+};
+
+// TODO find the base class
+struct itemdef_glovesst {
+	void **vtable;
+
+	string name_raw;	// ITEM_GLOVES_GLOVES
+	uint16_t subtype;
+	uint16_t pad;
+	string name_singular;	// glove
+	string name_plural;	// gloves
+
+	uint32_t unk_5c;
+	uint8_t unk_60;
+	uint8_t pad_61;
+	uint16_t unk_62;
+
+	void *flagarray_ptr_1;	// [0]
+	uint32_t flagarray_len_1;
+	uint32_t unk_6c;
+
+	void *flagarray_ptr_2;	// [33, 1]
+	uint32_t flagarray_len_2;
+
+	uint32_t unk_78;
+	uint16_t unk_7c;
+	uint16_t unk_7e;
+	uint16_t unk_80;
+	uint16_t pad_82;
+};
+
+struct item_glovesst {
+	df_item i;
+
+	uint32_t unk_80;	// race idx ? 241
+	uint32_t unk_84;
+	int32_t unk_88;
+	int32_t unk_8c;
+
+	vector(void*) itemimprovements;	// itemimprovement_threadst / itemimprovement_clothst
+
+	struct itemdef_glovest *itemdef;	// a0
+
+	char *flagarray_ptr;
+	uint32_t flagarray_len;
 };
 
 typedef struct df_job_link
