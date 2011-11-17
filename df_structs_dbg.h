@@ -472,23 +472,23 @@ typedef struct df_building
 	uint32_t y2;
 	uint32_t y3;
 	uint32_t z;
-	uint32_t unk_1c;
-	uint16_t unk_20;
+	uint32_t height;
+	int16_t material_type;
 	uint16_t pad_22;
-	uint32_t unk_28;
+	int32_t material_index;
 	uint8_t *unk_2c;	// room shape?
 	uint32_t x_min;	// left
 	uint32_t y_min;	// top
-	uint32_t width;	// x
-	uint32_t height;	// y
-	uint32_t unk_40;
+	uint32_t x_width;
+	uint32_t y_height;
+	uint32_t age;
 	uint16_t unk_44;
 	uint16_t pad_46;
-	uint32_t unk_48;
+	uint32_t id;
 	vector(df_job*) tasks;	// 4c: construct rock bed etc
 	vector(uint32_t) unk_5c;
 	vector(uint32_t) unk_6c;
-	uint8_t unk_7c;
+	uint8_t is_room;
 	uint8_t pad_7d;
 	uint16_t pad_7e;
 	vector(struct df_building*) covered_buildings;	// other buildings inside the room
@@ -497,15 +497,17 @@ typedef struct df_building
 	vector(uint32_t) unk_a4;
 	string unk_b4;	// NOT the building name (bedroom -> n)
 	vector(uint32_t) unk_d0;
-	uint16_t unk_e0;
-	uint16_t pad_e2;
-	vector(void*) items;	// similar to df_item_wrap: struct { df_item* item; uint16_t unk_4; }
-	uint32_t unk_f4;
-	// end of base generic class (may end earlier?)
 } df_building;
 
 struct building_doorst {
 	struct df_building b;
+
+	uint32_t unk_e0;
+	uint32_t unk_e4;
+	uint32_t unk_e8;
+	uint32_t unk_ec;
+	uint32_t unk_f0;
+	uint32_t unk_f4;
 
 	struct {
 		uint32_t forbid_passage:1;
@@ -521,6 +523,13 @@ struct building_doorst {
 
 struct building_farmplotst {
 	struct df_building b;
+
+	uint32_t unk_e0;
+	uint32_t unk_e4;
+	uint32_t unk_e8;
+	uint32_t unk_ec;
+	uint32_t unk_f0;
+	uint32_t unk_f4;
 
 	uint16_t plantation_program[4];	// per season ; 40 = plump helmet, -1 = nothing
 	uint32_t unk_100;
@@ -539,6 +548,13 @@ struct building_farmplotst {
 struct building_workshopst {
 	struct df_building b;
 
+	uint32_t unk_e0;
+	uint32_t unk_e4;
+	uint32_t unk_e8;
+	uint32_t unk_ec;
+	uint32_t unk_f0;
+	uint32_t unk_f4;
+
 	uint16_t workshop_type;	// 2 => masonry
 	vector(uint32_t) workshop_profile_ids;	// vector of df_creature id
 	uint32_t workshop_profile_minproficiency;
@@ -551,12 +567,157 @@ struct building_workshopst {
 struct building_tradedepotst {
 	struct df_building b;
 
+	uint32_t unk_e0;
+	uint32_t unk_e4;
+	uint32_t unk_e8;
+	uint32_t unk_ec;
+	uint32_t unk_f0;
+	uint32_t unk_f4;
+
 	struct {
 		uint32_t trader_requested:1;
 		uint32_t anyone_may_trade:1;
 		uint32_t unk:30;
 	} flags;	// f8
 	uint32_t pad_fc;
+};
+
+struct building_stockpilest {
+	struct df_building b;
+
+	uint32_t category_flags;	// 0xe0
+
+	// all uint8_t here are flags, eg 0/1
+	uint8_t animal_empty_cages;
+	uint8_t animal_empty_traps;
+	uint16_t pad_e6;
+	vector(uint8_t) animals;
+
+	vector(uint8_t) food_meat;	// 0xf8
+	vector(uint8_t) food_fish;
+	vector(uint8_t) food_unprepared_fish;
+	vector(uint8_t) food_egg;
+	vector(uint8_t) food_plants;
+	vector(uint8_t) food_drink_plant;
+	vector(uint8_t) food_drink_animal;
+	vector(uint8_t) food_cheese_plant;
+	vector(uint8_t) food_cheese_animal;
+	vector(uint8_t) food_seeds;
+	vector(uint8_t) food_leaves;
+	vector(uint8_t) food_powder_plant;
+	vector(uint8_t) food_powder_creature;
+	vector(uint8_t) food_glob;
+	vector(uint8_t) food_glob_paste;
+	vector(uint8_t) food_glob_pressed;
+	vector(uint8_t) food_liquid_plant;
+	vector(uint8_t) food_liquid_animal;
+	vector(uint8_t) food_liquid_misc;
+	uint8_t food_prepared_meals;
+	uint8_t pad_229;
+	uint16_t pad_22a;
+
+	vector(uint8_t) furniture_type;	// 0x22c
+	vector(uint8_t) furniture_other_mats;
+	vector(uint8_t) furniture_mats;
+	uint8_t furniture_quality_core[7];
+	uint8_t furniture_quality_total[7];
+	uint8_t furniture_sand_bags;
+	uint8_t pad_26b;
+	uint32_t pad_26c;
+
+	vector(uint8_t) refuse_type;	// 0x270
+	vector(uint8_t) refuse_corpse;
+	vector(uint8_t) refuse_body_parts;
+	vector(uint8_t) refuse_skulls;
+	vector(uint8_t) refuse_bones;
+	vector(uint8_t) refuse_shells;
+	vector(uint8_t) refuse_teeth;
+	vector(uint8_t) refuse_horns;
+	vector(uint8_t) refuse_hair;
+	uint8_t refuse_fresh_raw_hide;
+	uint8_t refuse_rotten_raw_hide;
+	uint16_t pad_302;
+
+	vector(uint8_t) stone;	// 0x304
+
+	vector(uint8_t) unk_314;
+
+	vector(uint8_t) ammo_type; // 0x324
+	vector(uint8_t) ammo_other_mats;
+	vector(uint8_t) ammo_mats;
+	uint8_t ammo_quality_core[7];
+	uint8_t ammo_quality_total[7];
+	uint16_t pad_362;
+
+	vector(uint8_t) coins;	// 0x364
+
+	vector(uint8_t) bars_other_mats;	// 0x374
+	vector(uint8_t) blocks_other_mats;
+	vector(uint8_t) bars_mats;
+	vector(uint8_t) blocks_mats;
+	vector(uint8_t) gems_rough_other_mats;
+	vector(uint8_t) gems_cut_other_mats;
+	vector(uint8_t) gems_rough_mats;
+	vector(uint8_t) gems_cut_mats;
+
+	vector(uint8_t) finished_goods_type;	// 0x3f4
+	vector(uint8_t) finished_goods_other_mats;
+	vector(uint8_t) finished_goods_mats;
+	uint8_t finished_goods_quality_core[7];
+	uint8_t finished_goods_quality_total[7];
+	uint16_t pad_432;
+
+	vector(uint8_t) leather;	// 0x434
+	vector(uint8_t) cloth_thread_silk;
+	vector(uint8_t) cloth_thread_plant;
+	vector(uint8_t) cloth_thread_yarn;
+	vector(uint8_t) cloth_thread_metal;
+	vector(uint8_t) cloth_cloth_silk;
+	vector(uint8_t) cloth_cloth_plant;
+	vector(uint8_t) cloth_cloth_yarn;
+	vector(uint8_t) cloth_cloth_metal;
+
+	vector(uint8_t) wood;	// 0x4c4
+
+	vector(uint8_t) weapon_weapon_type;
+	vector(uint8_t) weapon_trapcomp_type;
+	vector(uint8_t) weapon_other_mats;
+	vector(uint8_t) weapon_mats;
+	uint8_t weapons_quality_core[7];
+	uint8_t weapons_quality_total[7];
+	uint8_t weapons_usable;
+	uint8_t weapons_unusable;
+
+	vector(uint8_t) armor_body;	// 0x524
+	vector(uint8_t) armor_head;
+	vector(uint8_t) armor_feet;
+	vector(uint8_t) armor_hands;
+	vector(uint8_t) armor_legs;
+	vector(uint8_t) armor_shield;
+	vector(uint8_t) armor_other_mats;
+	vector(uint8_t) armor_mats;
+	uint8_t armor_quality_core[7];
+	uint8_t armor_quality_total[7];
+	uint8_t armor_usable;
+	uint8_t armor_unusable;
+
+	uint8_t allow_organic;	// 0x5b4
+	uint8_t allow_inorganic;
+	uint16_t pad_5b6;
+
+	uint16_t max_barrels;	// 5b8
+	uint16_t max_bins;
+
+	vector(uint32_t) unk_5bc;
+	vector(uint32_t) unk_5cc;
+	vector(uint32_t) unk_5dc;
+	vector(uint16_t) unk_5ec;
+
+	df_building *give_to;
+	vector(df_building*) take_from;
+
+	uint32_t stockpile_number;
+
 };
 
 typedef struct df_unit_unk_evt {
