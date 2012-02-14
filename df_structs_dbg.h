@@ -196,6 +196,10 @@ typedef struct df_soul
 	int32_t unk_7c;
 	int32_t unk_80;
 	int32_t unk_84;
+	int32_t unk_88_new;
+	int32_t unk_8c_new;
+	int32_t unk_90_new;
+	int32_t unk_94_new;
 	df_attrib mental[NUM_CREATURE_MENTAL_ATTRIBUTES];       // 88..1f3
 	vector(df_skill*) skills; // 1f4;
 	vector(void*) likes;
@@ -810,6 +814,7 @@ typedef struct df_creature
 	uint32_t civ;           // 108
 	int32_t unk_10c;
 	int32_t unk_110;
+	int32_t unk_114_new;
 
 	vector(uint32_t) unk_114;
 	vector(uint32_t) unk_124;
@@ -854,8 +859,13 @@ typedef struct df_creature
 	int16_t unk_21c;
 	int16_t unk_21e;
 	void* unk_220;	// set on ghost?
+	int32_t unk_228_new;
 	uint32_t birth_year;    // 224
 	uint32_t birth_time;    // 228
+	int32_t unk_234_new;
+	int32_t unk_238_new;
+	uint32_t unk_23c_new;
+	uint32_t unk_240_new;
 	uint32_t unk_22c;
 	uint32_t unk_230;
 	struct df_creature* following;	// try to get on the same pos as this creature
@@ -876,6 +886,7 @@ typedef struct df_creature
 	int32_t unk_268;
 	int32_t unk_26c;
 	int16_t unk_270;
+	int16_t pad_272;
 	int32_t unk_274;
 	int32_t unk_278;
 	int32_t unk_27c;
@@ -961,6 +972,8 @@ typedef struct df_creature
 	int32_t job_counter;	// 540 current_job unit/walk done when reach -1, decremented every tick
 	int32_t unk_544;	// if set, decrements every job_counter reroll
 	int16_t unk_548;
+	int16_t pad_54a_new;
+	int32_t unk_564_new;
 	int16_t winded;
 	int16_t stunned;	// 54c decrements every tick, unstun at 0
 	int16_t unconscious;
@@ -982,6 +995,34 @@ typedef struct df_creature
 	uint32_t unk_574;
 	uint32_t unk_578;
 	uint32_t unk_57c;
+
+	uint8_t unk_5a0_new;
+	uint8_t pad_5a1_new;
+	uint16_t pad_5a2_new;
+	string unk_5a4_new;
+	string unk_5c0_new;
+	string unk_5dc_new;
+	uint32_t unk_5f8_new;
+	uint32_t unk_5fc_new;
+	uint32_t unk_600_new;
+	uint32_t unk_604_new;
+	vector(uint32_t) unk_608_new;
+	vector(uint32_t) unk_618_new;
+	uint32_t unk_628_new;
+	uint32_t unk_62c_new;
+	uint32_t unk_630_new;
+	uint32_t unk_634_new;
+	vector(uint32_t) unk_638_new;
+	vector(uint32_t) unk_648_new;
+	vector(uint32_t) unk_658_new;
+	uint32_t unk_668_new;
+	vector(uint32_t) unk_66c_new;
+	vector(uint32_t) unk_67c_new;
+	uint32_t unk_68c_new;
+	uint32_t unk_690_new;
+	uint32_t unk_694_new;
+	uint32_t unk_698_new;
+
 	uint32_t unk_580;	// fluctuates a lot, temperature?
 	uint32_t unk_584;	// fluctuate
 	uint32_t unk_588;	// fluctuate
@@ -1026,11 +1067,12 @@ typedef struct df_creature
 	vector(uint16_t) unk_770;
 	vector(uint16_t) unk_780;
 	uint32_t hist_figure_id;        // 790
+	uint32_t hist_figure_id_copy_new;	// vampire impersonation?
 	uint16_t able_stand;            // 794
 	uint16_t able_stand_impair;     // 796
 	uint16_t able_grasp;            // 798
 	uint16_t able_grasp_impair;     // 79a
-	uint32_t unk_79c;
+	// new: deleted uint32_t unk_79c;
 	uint32_t unk_7a0;
 	vector(uint32_t*) unk_7a4;
 	uint32_t unk_7b4;
@@ -1047,15 +1089,26 @@ typedef struct df_creature
 	vector(uint32_t) unk_804;
 	vector(uint32_t) unk_814;
 
-	uint32_t unk_824;
-	uint32_t unk_828;
-	uint32_t unk_82c;
-	uint32_t unk_830;
-	uint32_t unk_834;
-	uint32_t unk_838;
-	void* unk_83c;
+	// new: delete original unk_824 -> unk_840
+	vector(void*) unk_940_new;
+	vector(void*) unk_950_new;
+	uint32_t unk_960_new;	// 960->978 uninit
+	uint32_t unk_964_new;
+	uint32_t unk_968_new;
+	uint32_t unk_96c_new;
+	uint32_t unk_970_new;
+	uint32_t unk_978_new;
+	uint32_t unk_97c_new;
+	vector(void*) unk_980_new;
+	vector(void*) unk_990_new;
+	vector(void*) unk_9a0_new;
+	uint32_t unk_9b0_new;	// 0
+	uint32_t unk_9b4_new;	// 0x1d1
+	uint32_t unk_9b8_new;	// 1
+	uint32_t unk_9bc_new;	// 0x1d1
+	uint32_t unk_9c0_new;	// 1
+	int32_t unk_9c4_new;	// -1
 
-	vector(void*) unk_840;	// item related
 	vector(uint32_t) unk_850;
 	vector(uint32_t) unk_860;
 	uint32_t unk_870;
