@@ -1,20 +1,19 @@
-// foo
-// vi:expandtab:sw=4
+#include "Core.h"
+#include "Console.h"
+#include "Export.h"
+#include "PluginManager.h"
 
-#include <iostream>
-#include <vector>
-#include <map>
-#include <stddef.h>
-#include <assert.h>
-#include <string.h>
-using namespace std;
-#include <dfhack/Core.h>
-#include <dfhack/Console.h>
-#include <dfhack/Export.h>
-#include <dfhack/PluginManager.h>
-#include <dfhack/VersionInfo.h>
-#include <dfhack/modules/Creatures.h>
+#include "DataDefs.h"
+#include "df/ui.h"
+#include "df/world.h"
+#include "df/unit.h"
+
+using std::string;
+using std::vector;
 using namespace DFHack;
+
+using df::global::world;
+using df::global::ui;
 
 // dfhack interface
 DFhackCExport const char * plugin_name ( void )
@@ -29,44 +28,39 @@ DFhackCExport command_result plugin_shutdown ( Core * c )
 
 static int enable_fastdwarf;
 
-// remove that if struct df_creature is updated
-#define job_counter unk_540
-
 DFhackCExport command_result plugin_onupdate ( Core * c )
 {
     if (!enable_fastdwarf)
         return CR_OK;
+    int32_t race = ui->race_id;
+    int32_t civ = ui->civ_id;
 
-    static vector <df_creature*> *v;
-    df_creature *cre;
+    for (size_t i = 0; i < world->units.all.size(); i++)
+    {
+        df::unit *unit = world->units.all[i];
 
-    if (!v) {
-        OffsetGroup *ogc = c->vinfo->getGroup("Creatures");
-        v = (vector<df_creature*>*)ogc->getAddress("vector");
+        if (unit->race == race && unit->civ_id == civ && unit->counters.job_counter > 0)
+            unit->counters.job_counter = 0;
+        // could also patch the unit->job.current_job->completion_timer
     }
-
-    //c->Suspend(); // will deadlock in onupdate
-    for (unsigned i=0 ; i<v->size() ; ++i) {
-        cre = v->at(i);
-        if (cre->race == 241 && cre->job_counter > 0)
-            cre->job_counter = 0;
-	// could also patch the cre->current_job->counter
-    }
-    //c->Resume();
-
     return CR_OK;
 }
 
 static command_result fastdwarf (Core * c, vector <string> & parameters)
 {
-    if (parameters.size() == 1 && (parameters[0] == "0" || parameters[0] == "1")) {
+    if (parameters.size() == 1 && (parameters[0] == "0" || parameters[0] == "1"))
+    {
         if (parameters[0] == "0")
             enable_fastdwarf = 0;
         else
             enable_fastdwarf = 1;
         c->con.print("fastdwarf %sactivated.\n", (enable_fastdwarf ? "" : "de"));
-    } else {
-        c->con.print("Activate fastdwarf with 'fastdwarf 1', deactivate with 'fastdwarf 0'.\nCurrent state: %d.\n", enable_fastdwarf);
+    }
+    else
+    {
+        c->con.print("Makes your minions move at ludicrous speeds.\n"
+            "Activate with 'fastdwarf 1', deactivate with 'fastdwarf 0'.\n"
+            "Current state: %d.\n", enable_fastdwarf);
     }
 
     return CR_OK;
@@ -77,8 +71,8 @@ DFhackCExport command_result plugin_init ( Core * c, std::vector <PluginCommand>
     commands.clear();
 
     commands.push_back(PluginCommand("fastdwarf",
-                "enable/disable fastdwarf (parameter=0/1)",
-                fastdwarf));
+        "enable/disable fastdwarf (parameter=0/1)",
+        fastdwarf));
 
     return CR_OK;
 }
