@@ -51,13 +51,22 @@ sub render_enum_fields {
 
     my $value = -1;
     for my $item ($type->findnodes('child::enum-item')) {
-        $value = $item->getAttribute('value') || ($value+1);
+        $value += 1;
+        my $newvalue = $item->getAttribute('value') || $value;
         my $elemname = $item->getAttribute('name'); # || "unk_$value";
 
         if ($elemname) {
-            push @lines, "$elemname = $value;";
+            if ($value == $newvalue) {
+                push @lines, "$elemname,";
+            } else {
+                push @lines, "$elemname = $newvalue,";
+            }
         }
+
+        $value = $newvalue;
     }
+
+    chop $lines[$#lines] if (@lines);      # remove last coma
 }
 
 
@@ -92,9 +101,9 @@ sub render_global_class {
     # ensure pre-definition of ancestors
     my $parent = $type->getAttribute('inherits-from');
     if ($parent) {
-	    render_global_class($parent, $global_types{$parent}) if (!$seen_class{$parent});
-	    my $oparent = $global_types{$parent}->getAttribute('original-name');
-	    $parent = $oparent if $oparent;
+        render_global_class($parent, $global_types{$parent}) if (!$seen_class{$parent});
+        my $oparent = $global_types{$parent}->getAttribute('original-name');
+        $parent = $oparent if $oparent;
     }
 
     return if $seen_class{$name};
@@ -102,7 +111,7 @@ sub render_global_class {
 
     my $rtti_name = $type->getAttribute('original-name') ||
                     $type->getAttribute('type-name') ||
-		    $name;
+                    $name;
 
     my $has_rtti = $parent;
     if (!$parent and $type->getAttribute('ld:meta') eq 'class-type') {
@@ -118,7 +127,7 @@ sub render_global_class {
     push @lines, "struct $rtti_name {";
     indent {
         if ($parent) {
-            push @lines, "struct $parent;";
+            push @lines, "struct $parent super;";
         } elsif ($has_rtti) {
             push @lines, "void **vtable;";
         }
@@ -136,7 +145,7 @@ sub render_struct_fields {
             render_struct_fields($field);
         }
         #next if (!$name);
-	render_item($field, $name)
+        render_item($field, $name)
     }
 }
 
@@ -154,8 +163,8 @@ sub render_global_objects {
 sub render_item {
     my ($item, $name) = @_;
     if (!$item) {
-	    push @lines, "// noitem $name";
-	    return;
+        push @lines, "// noitem $name";
+        return;
     }
 
     my $meta = $item->getAttribute('ld:meta');
@@ -204,7 +213,7 @@ sub render_item_compound {
                 render_bitfield_fields($item);
             }
         };
-	$name ||= '';
+        $name ||= '';
         push @lines, "} $name;"
     } elsif ($subtype eq 'enum') {
         push @lines, "enum {";
@@ -286,6 +295,47 @@ for my $name (sort { $a cmp $b } keys %global_types) {
 
 render_global_objects($doc->findnodes('/ld:data-definition/ld:global-object'));
 
+my $hdr = <<EOS;
+typedef char      int8_t;
+typedef short     int16_t;
+typedef int       int32_t;
+typedef long long int64_t;
+typedef unsigned char      uint8_t;
+typedef unsigned short     uint16_t;
+typedef unsigned int       uint32_t;
+typedef unsigned long long uint64_t;
+
+#if 1
+
+// Windows STL
+struct std_string {
+    union {
+        char buf[16];
+        char *ptr;
+    };
+    int32_t len;
+    int32_t capa;
+    int32_t pad;
+};
+
+#define std_vector(type) struct { type *ptr; type *endptr; type *endalloc; int32_t pad; }
+
+#else
+
+// Linux Glibc STL
+struct std_string {
+    char *ptr;
+};
+
+#define std_vector(type) struct { type *ptr; type *endptr; type *endalloc; }
+
+#endif
+
+typedef struct std_string std_string;
+
+EOS
+
 open FH, ">$output";
+print FH $hdr;
 print FH "$_\n" for @lines;
 close FH;
