@@ -5,10 +5,10 @@ use warnings;
 
 use XML::LibXML;
 
+my @lines_full;
 our @lines;
-our @predeclare_lines;
 my %seen_class;
-my %predeclared_class;
+my %fwd_decl_class;
 my %global_types;
 
 sub indent(&) {
@@ -22,36 +22,12 @@ sub indent(&) {
     push @lines, @lines2;
 }
 
-sub buffer_predeclare(&) {
-    my ($sub) = @_;
-    my @lines2;
-    {
-        local @lines;
-        local @predeclare_lines;
-        $sub->();
-        push @lines2, @predeclare_lines;
-        push @lines2, @lines;
-    }
-    push @lines, @lines2;
-}
-
-sub predeclare {
+sub fwd_decl_class {
     my ($name) = @_;
     return if ($seen_class{$name});
-    return if ($predeclared_class{$name});
-    $predeclared_class{$name} += 1;
-    push @predeclare_lines, "struct $name;";
-}
-
-sub lines_to_predeclare(&) {
-    my ($sub) = @_;
-    my @lines2;
-    {
-        local @lines;
-        $sub->();
-        push @lines2, @lines;
-    }
-    push @predeclare_lines, @lines2;
+    return if ($fwd_decl_class{$name});
+    $fwd_decl_class{$name} += 1;
+    push @lines_full, "struct $name;";
 }
 
 sub merge_line($&$) {
@@ -98,11 +74,13 @@ my %item_renderer = (
 sub render_global_enum {
     my ($name, $type) = @_;
 
+    local @lines;
     push @lines, "enum $name {";
     indent {
         render_enum_fields($type);
     };
     push @lines, "};\n";
+    push @lines_full, @lines;
 }
 
 my %enum_seen;
@@ -138,11 +116,13 @@ sub render_global_bitfield {
     return if $seen_class{$name};
     $seen_class{$name}++;
 
+    local @lines;
     push @lines, "struct $name {";
     indent {
         render_bitfield_fields($type);
     };
     push @lines, "};\n";
+    push @lines_full, @lines;
 }
 sub render_bitfield_fields {
     my ($type) = @_;
@@ -181,18 +161,18 @@ sub render_global_class {
 
     my $has_rtti = ($type->getAttribute('ld:meta') eq 'class-type');
 
-    buffer_predeclare {
-        push @lines, "struct $rtti_name {";
-        indent {
-            if ($parent) {
-                push @lines, "struct $parent super;";
-            } elsif ($has_rtti) {
-                push @lines, "void **vtable;";
-            }
-            render_struct_fields($type);
-        };
-        push @lines, "};\n";
+    local @lines;
+    push @lines, "struct $rtti_name {";
+    indent {
+        if ($parent) {
+            push @lines, "struct $parent super;";
+        } elsif ($has_rtti) {
+            push @lines, "void **vtable;";
+        }
+        render_struct_fields($type);
     };
+    push @lines, "};\n";
+    push @lines_full, @lines;
 }
 sub render_struct_fields {
     my ($type) = @_;
@@ -208,12 +188,14 @@ sub render_struct_fields {
 sub render_global_objects {
     my (@objects) = @_;
 
+    local @lines;
     for my $obj (@objects) {
         my $oname = $obj->getAttribute('name');
         my $item = $obj->findnodes('child::ld:item')->[0];
         render_item($item, $oname);
         $lines[$#lines] .= ";\n";
     }
+    push @lines_full, @lines;
 }
 
 
@@ -250,16 +232,14 @@ sub render_item_global {
         render_item_number($item, $name);
     } else {
         if (!$name or $name !~ /^\*/) {
-            lines_to_predeclare {
-                my $gtype = $global_types{$typename};
-                if ($gtype->getAttribute('ld:meta') eq 'bitfield-type') {
-                    render_global_bitfield($typename, $global_types{$typename});
-                } else {
-                    render_global_class($typename, $global_types{$typename});
-                }
-            };
+            my $gtype = $global_types{$typename};
+            if ($gtype->getAttribute('ld:meta') eq 'bitfield-type') {
+                render_global_bitfield($typename, $global_types{$typename});
+            } else {
+                render_global_class($typename, $global_types{$typename});
+            }
         } else {
-            predeclare($tname);
+            fwd_decl_class($tname);
         }
         push @lines, "struct $tname";
         $lines[$#lines] .= " $name" if ($name);
@@ -470,5 +450,5 @@ EOS
 
 open FH, ">$output";
 print FH $hdr;
-print FH "$_\n" for @lines;
+print FH "$_\n" for @lines_full;
 close FH;
