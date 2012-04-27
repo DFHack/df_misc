@@ -179,17 +179,7 @@ sub render_global_class {
                     $name;
     $seen_class{$rtti_name}++;
 
-    my $has_rtti = $parent;
-    $has_rtti = 1 if ($type->findnodes('child::virtual-methods')->[0]);
-    if (!$parent and $type->getAttribute('ld:meta') eq 'class-type') {
-        for my $anytypename (keys %global_types) {
-            my $anytype = $global_types{$anytypename};
-            if ($anytype->getAttribute('ld:meta') eq 'class-type') {
-                my $anyparent = $anytype->getAttribute('inherits-from');
-                $has_rtti = 1 if ($anyparent and $anyparent eq $name);
-            }
-        }
-    }
+    my $has_rtti = ($type->getAttribute('ld:meta') eq 'class-type');
 
     buffer_predeclare {
         push @lines, "struct $rtti_name {";
