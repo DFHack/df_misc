@@ -71,11 +71,14 @@ my %item_renderer = (
 );
 
 
+my %enum_seen;
+my $enum_prefix;
 sub render_global_enum {
     my ($name, $type) = @_;
 
     local @lines;
     push @lines, "enum $name {";
+    $enum_prefix = $name;
     indent {
         render_enum_fields($type);
     };
@@ -83,7 +86,6 @@ sub render_global_enum {
     push @lines_full, @lines;
 }
 
-my %enum_seen;
 sub render_enum_fields {
     my ($type) = @_;
 
@@ -94,6 +96,7 @@ sub render_enum_fields {
         my $elemname = $item->getAttribute('name'); # || "unk_$value";
 
         if ($elemname) {
+            $elemname = $enum_prefix . '_' . $elemname;
             $elemname .= '_' while ($enum_seen{$elemname});
             $enum_seen{$elemname} += 1;
             if ($value == $newvalue) {
@@ -116,6 +119,7 @@ sub render_global_bitfield {
     return if $seen_class{$name};
     $seen_class{$name}++;
 
+    $enum_prefix = $name;
     local @lines;
     push @lines, "struct $name {";
     indent {
@@ -161,6 +165,7 @@ sub render_global_class {
 
     my $has_rtti = ($type->getAttribute('ld:meta') eq 'class-type');
 
+    $enum_prefix = $name;
     local @lines;
     push @lines, "struct $rtti_name {";
     indent {
@@ -188,6 +193,7 @@ sub render_struct_fields {
 sub render_global_objects {
     my (@objects) = @_;
 
+    $enum_prefix = 'global';
     local @lines;
     for my $obj (@objects) {
         my $oname = $obj->getAttribute('name');
