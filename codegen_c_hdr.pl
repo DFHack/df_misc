@@ -6,6 +6,10 @@ use warnings;
 use XML::LibXML;
 
 our @lines;
+our @predeclare_lines;
+my %seen_class;
+my %predeclared_class;
+my %global_types;
 
 sub indent(&) {
     my ($sub) = @_;
@@ -15,8 +19,62 @@ sub indent(&) {
         $sub->();
         @lines2 = map { "    " . $_ } @lines;
     }
-    push @lines, @lines2
+    push @lines, @lines2;
 }
+
+sub buffer_predeclare(&) {
+    my ($sub) = @_;
+    my @lines2;
+    {
+        local @lines;
+        local @predeclare_lines;
+        $sub->();
+        push @lines2, @predeclare_lines;
+        push @lines2, @lines;
+    }
+    push @lines, @lines2;
+}
+
+sub predeclare {
+    my ($name) = @_;
+    return if ($seen_class{$name});
+    return if ($predeclared_class{$name});
+    $predeclared_class{$name} += 1;
+    push @predeclare_lines, "struct $name;";
+}
+
+sub lines_to_predeclare(&) {
+    my ($sub) = @_;
+    my @lines2;
+    {
+        local @lines;
+        $sub->();
+        push @lines2, @lines;
+    }
+    push @predeclare_lines, @lines2;
+}
+
+sub merge_line($&$) {
+    my ($pre, $sub, $post) = @_;
+    my @lines2;
+    {
+        local @lines;
+        $sub->();
+        my $lfirst = $pre;
+        my $llast;
+        $lfirst .= shift(@lines) if (@lines);
+        if (@lines) {
+            $llast = pop(@lines) . $post;
+        } else {
+            $lfirst .= $post;
+        }
+        push @lines2, $lfirst;
+        push @lines2, @lines;
+        push @lines2, $llast if $llast;
+    }
+    push @lines, @lines2;
+}
+
 
 my %global_type_renderer = (
     'enum-type' => \&render_global_enum,
@@ -46,6 +104,8 @@ sub render_global_enum {
     };
     push @lines, "};\n";
 }
+
+my %enum_seen;
 sub render_enum_fields {
     my ($type) = @_;
 
@@ -56,6 +116,8 @@ sub render_enum_fields {
         my $elemname = $item->getAttribute('name'); # || "unk_$value";
 
         if ($elemname) {
+            $elemname .= '_' while ($enum_seen{$elemname});
+            $enum_seen{$elemname} += 1;
             if ($value == $newvalue) {
                 push @lines, "$elemname,";
             } else {
@@ -72,6 +134,9 @@ sub render_enum_fields {
 
 sub render_global_bitfield {
     my ($name, $type) = @_;
+
+    return if $seen_class{$name};
+    $seen_class{$name}++;
 
     push @lines, "struct $name {";
     indent {
@@ -93,17 +158,17 @@ sub render_bitfield_fields {
 }
 
 
-my %global_types;
-my %seen_class;
 sub render_global_class {
     my ($name, $type) = @_;
 
     # ensure pre-definition of ancestors
     my $parent = $type->getAttribute('inherits-from');
     if ($parent) {
-        render_global_class($parent, $global_types{$parent}) if (!$seen_class{$parent});
-        my $oparent = $global_types{$parent}->getAttribute('original-name');
-        $parent = $oparent if $oparent;
+        my $ptype = $global_types{$parent};
+        render_global_class($parent, $ptype) if (!$seen_class{$parent});
+        $parent = $ptype->getAttribute('original-name') ||
+                  $ptype->getAttribute('type-name') ||
+                  $parent;
     }
 
     return if $seen_class{$name};
@@ -112,8 +177,10 @@ sub render_global_class {
     my $rtti_name = $type->getAttribute('original-name') ||
                     $type->getAttribute('type-name') ||
                     $name;
+    $seen_class{$rtti_name}++;
 
     my $has_rtti = $parent;
+    $has_rtti = 1 if ($type->findnodes('child::virtual-methods')->[0]);
     if (!$parent and $type->getAttribute('ld:meta') eq 'class-type') {
         for my $anytypename (keys %global_types) {
             my $anytype = $global_types{$anytypename};
@@ -124,28 +191,27 @@ sub render_global_class {
         }
     }
 
-    push @lines, "struct $rtti_name {";
-    indent {
-        if ($parent) {
-            push @lines, "struct $parent super;";
-        } elsif ($has_rtti) {
-            push @lines, "void **vtable;";
-        }
-        render_struct_fields($type);
+    buffer_predeclare {
+        push @lines, "struct $rtti_name {";
+        indent {
+            if ($parent) {
+                push @lines, "struct $parent super;";
+            } elsif ($has_rtti) {
+                push @lines, "void **vtable;";
+            }
+            render_struct_fields($type);
+        };
+        push @lines, "};\n";
     };
-    push @lines, "};\n";
 }
 sub render_struct_fields {
     my ($type) = @_;
 
     for my $field ($type->findnodes('child::ld:field')) {
-        my $name = $field->getAttribute('name');
-        $name = $field->getAttribute('ld:anon-name') if (!$name);
-        if (!$name and $field->getAttribute('ld:anon-compound')) {
-            render_struct_fields($field);
-        }
-        #next if (!$name);
-        render_item($field, $name)
+        my $name = $field->getAttribute('name') ||
+                   $field->getAttribute('ld:anon-name');
+        render_item($field, $name);
+        $lines[$#lines] .= ';';
     }
 }
 
@@ -156,6 +222,7 @@ sub render_global_objects {
         my $oname = $obj->getAttribute('name');
         my $item = $obj->findnodes('child::ld:item')->[0];
         render_item($item, $oname);
+        $lines[$#lines] .= ";\n";
     }
 }
 
@@ -163,7 +230,8 @@ sub render_global_objects {
 sub render_item {
     my ($item, $name) = @_;
     if (!$item) {
-        push @lines, "// noitem $name";
+        push @lines, "void";
+        $lines[$#lines] .= " $name" if ($name);
         return;
     }
 
@@ -182,11 +250,29 @@ sub render_item_global {
 
     my $typename = $item->getAttribute('type-name');
     my $subtype = $item->getAttribute('ld:subtype');
+    my $type = $global_types{$typename};
+    my $tname = $type->getAttribute('original-name') ||
+                    $type->getAttribute('type-name') ||
+                    $typename;
 
     if ($subtype and $subtype eq 'enum') {
+        #push @lines, "enum $typename $name;";  # this does not handle int16_t enums
         render_item_number($item, $name);
     } else {
-        push @lines, "struct $typename $name;";
+        if (!$name or $name !~ /^\*/) {
+            lines_to_predeclare {
+                my $gtype = $global_types{$typename};
+                if ($gtype->getAttribute('ld:meta') eq 'bitfield-type') {
+                    render_global_bitfield($typename, $global_types{$typename});
+                } else {
+                    render_global_class($typename, $global_types{$typename});
+                }
+            };
+        } else {
+            predeclare($tname);
+        }
+        push @lines, "struct $tname";
+        $lines[$#lines] .= " $name" if ($name);
     }
 }
 
@@ -197,7 +283,10 @@ sub render_item_number {
     $subtype = $item->getAttribute('base-type') if (!$subtype or $subtype eq 'enum' or $subtype eq 'bitfield');
     $subtype = 'int32_t' if (!$subtype);
     $subtype = 'int8_t' if ($subtype eq 'bool');
-    push @lines, "$subtype $name;";
+    $subtype = 'float' if ($subtype eq 's-float');
+
+    push @lines, "$subtype";
+    $lines[$#lines] .= " $name" if ($name);
 }
 
 sub render_item_compound {
@@ -205,7 +294,11 @@ sub render_item_compound {
 
     my $subtype = $item->getAttribute('ld:subtype');
     if (!$subtype || $subtype eq 'bitfield') {
-        push @lines, "struct {";
+        if ($item->getAttribute('is-union')) {
+            push @lines, "union {";
+        } else {
+            push @lines, "struct {";
+        }
         indent {
             if (!$subtype) {
                 render_struct_fields($item);
@@ -213,14 +306,17 @@ sub render_item_compound {
                 render_bitfield_fields($item);
             }
         };
-        $name ||= '';
-        push @lines, "} $name;"
+        push @lines, "}";
+        $lines[$#lines] .= " $name" if ($name);
+
     } elsif ($subtype eq 'enum') {
         push @lines, "enum {";
         indent {
             render_enum_fields($item);
         };
-        push @lines, "} $name;";
+        push @lines, "}";
+        $lines[$#lines] .= " $name" if ($name);
+
     } else {
         print "no render compound $subtype\n";
     }
@@ -231,8 +327,33 @@ sub render_item_container {
 
     my $subtype = $item->getAttribute('ld:subtype');
     $subtype = join('_', split('-', $subtype));
-    #my $tg = $item->findnodes('child::ld:item')->[0];
-    push @lines, "struct $subtype $name;";
+    my $tg = $item->findnodes('child::ld:item')->[0];
+    if ($tg) {
+        if ($subtype eq 'stl_vector') {
+            merge_line('std_vector(', sub {
+                render_item($tg, '');
+            }, ")");
+        } elsif ($subtype eq 'df_linked_list') {
+            push @lines, 'struct df_linked_list';
+        } elsif ($subtype eq 'df_array') {
+            push @lines, 'struct df_array';
+        } elsif ($subtype eq 'stl_deque') {
+            push @lines, "// TODO struct stl_deque";
+        } else {
+            push @lines, "// TODO container $subtype";
+        }
+    } else {
+        if ($subtype eq 'stl_vector') {
+            push @lines, 'std_vector(void*)';
+        } elsif ($subtype eq 'stl_bit_vector') {
+            push @lines, 'std_vector(bool)';
+        } elsif ($subtype eq 'df_flagarray') {
+            push @lines, 'struct df_flagarray';
+        } else {
+            push @lines, "// TODO container_notg $subtype";
+        }
+    }
+    $lines[$#lines] .= " $name" if ($name);
 }
 
 sub render_item_pointer {
@@ -247,7 +368,11 @@ sub render_item_staticarray {
 
     my $count = $item->getAttribute('count');
     my $tg = $item->findnodes('child::ld:item')->[0];
-    render_item($tg, "${name}[$count]");
+    if ($name and $name =~ /\*$/) {
+        render_item($tg, "*${name}");
+    } else {
+        render_item($tg, "${name}[$count]");
+    }
 }
 
 sub render_item_primitive {
@@ -255,7 +380,8 @@ sub render_item_primitive {
 
     my $subtype = $item->getAttribute('ld:subtype');
     if ($subtype eq 'stl-string') {
-        push @lines, "struct stl_string $name;";
+        push @lines, "std_string";
+        $lines[$#lines] .= " $name" if ($name);
     } else {
         print "no render primitive $subtype\n";
     }
@@ -267,10 +393,10 @@ sub render_item_bytes {
     my $subtype = $item->getAttribute('ld:subtype');
     if ($subtype eq 'padding') {
         my $size = $item->getAttribute('size');
-        push @lines, "char ${name}[$size];";
+        push @lines, "char ${name}[$size]";
     } elsif ($subtype eq 'static-string') {
         my $size = $item->getAttribute('size');
-        push @lines, "char ${name}[$size];";
+        push @lines, "char ${name}[$size]";
     } else {
         print "no render bytes $subtype\n";
     }
@@ -304,6 +430,7 @@ typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
 typedef unsigned long long uint64_t;
+typedef char bool;
 
 #if 1
 
@@ -332,6 +459,22 @@ struct std_string {
 #endif
 
 typedef struct std_string std_string;
+
+struct df_linked_list {
+    void *item;
+    void *prev;
+    void *next;
+};
+
+struct df_array {
+    void *ptr;
+    uint16_t len;
+};
+
+struct df_flagarray {
+    uint8_t *ptr;
+    uint32_t len;
+};
 
 EOS
 
