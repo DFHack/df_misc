@@ -72,13 +72,13 @@ my %item_renderer = (
 
 
 my %enum_seen;
-my $enum_prefix;
+our $prefix;
 sub render_global_enum {
     my ($name, $type) = @_;
 
     local @lines;
     push @lines, "enum $name {";
-    $enum_prefix = $name;
+    $prefix = $name;
     indent {
         render_enum_fields($type);
     };
@@ -96,7 +96,7 @@ sub render_enum_fields {
         my $elemname = $item->getAttribute('name'); # || "unk_$value";
 
         if ($elemname) {
-            $elemname = $enum_prefix . '_' . $elemname;
+            $elemname = $prefix . '_' . $elemname;
             $elemname .= '_' while ($enum_seen{$elemname});
             $enum_seen{$elemname} += 1;
             if ($value == $newvalue) {
@@ -119,7 +119,7 @@ sub render_global_bitfield {
     return if $seen_class{$name};
     $seen_class{$name}++;
 
-    $enum_prefix = $name;
+    $prefix = $name;
     local @lines;
     push @lines, "struct $name {";
     indent {
@@ -165,7 +165,7 @@ sub render_global_class {
 
     my $has_rtti = ($type->getAttribute('ld:meta') eq 'class-type');
 
-    $enum_prefix = $name;
+    $prefix = $name;
     local @lines;
     push @lines, "struct $rtti_name {";
     indent {
@@ -193,7 +193,7 @@ sub render_struct_fields {
 sub render_global_objects {
     my (@objects) = @_;
 
-    $enum_prefix = 'global';
+    $prefix = 'global';
     local @lines;
     for my $obj (@objects) {
         my $oname = $obj->getAttribute('name');
@@ -292,12 +292,15 @@ sub render_item_compound {
 
     my $subtype = $item->getAttribute('ld:subtype');
     if (!$subtype || $subtype eq 'bitfield') {
+        my $tdef = $item->getAttribute('ld:typedef-name') || 'anon';
+        my $sname = $prefix . '_' . $tdef;
         if ($item->getAttribute('is-union')) {
             push @lines, "union {";
         } else {
-            push @lines, "struct {";
+            push @lines, "struct $sname {";
         }
         indent {
+            local $prefix = $sname;
             if (!$subtype) {
                 render_struct_fields($item);
             } else {
@@ -399,7 +402,7 @@ sub render_item_bytes {
     }
 }
 
-my $input = $ARGV[0] || 'library/include/df/codegen.out.xml';
+my $input = $ARGV[0] || 'codegen/codegen.out.xml';
 my $output = 'codegen.h';
 
 my $doc = XML::LibXML->new()->parse_file($input);
