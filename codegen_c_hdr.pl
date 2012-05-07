@@ -205,6 +205,28 @@ sub render_global_objects {
 }
 
 
+sub render_item_simple {
+    my ($item, $name) = @_;
+    if ($item) {
+        my $meta = $item->getAttribute('ld:meta');
+	if ($meta and $meta eq 'pointer') {
+	    my $pitem = $item->findnodes('child::ld:item')->[0];
+	    if ($pitem) {
+		my $pmeta = $pitem->getAttribute('ld:meta');
+		if ($pmeta eq 'compound' or $pmeta eq 'pointer' or $pmeta eq 'static-array') {
+		    push @lines, "void*";
+		    $lines[$#lines] .= " $name" if ($name);
+		    return;
+                }
+	    }
+        } elsif ($meta eq 'compound' and $item->getAttribute('ld:subtype') eq 'bitfield')  {
+            render_item_number($item, $name);
+            return;
+        }
+    }
+    return render_item($item, $name);
+}
+
 sub render_item {
     my ($item, $name) = @_;
     if (!$item) {
@@ -286,12 +308,11 @@ sub render_item_compound {
         $lines[$#lines] .= " $name" if ($name);
 
     } elsif ($subtype eq 'enum') {
-        push @lines, "enum {";
-        indent {
-            render_enum_fields($item);
-        };
-        push @lines, "}";
-        $lines[$#lines] .= " $name" if ($name);
+        #push @lines, "enum {";
+        #indent { render_enum_fields($item); };
+        #push @lines, "}";
+        #$lines[$#lines] .= " $name" if ($name);
+        render_item_number($item, $name);
 
     } else {
         print "no render compound $subtype\n";
@@ -307,7 +328,7 @@ sub render_item_container {
     if ($tg) {
         if ($subtype eq 'stl_vector') {
             merge_line('std_vector(', sub {
-                render_item($tg, '');
+                render_item_simple($tg, '');
             }, ")");
         } elsif ($subtype eq 'df_linked_list') {
             push @lines, 'struct df_linked_list';
