@@ -136,6 +136,7 @@ sub render_bitfield_fields {
         my $count = $field->getAttribute('count') || 1;
         my $name = $field->getAttribute('name');
         $name = $field->getAttribute('ld:anon-name') || '' if (!$name);
+        $name = 'x' . $name if $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)/;
         push @lines, "int $name:$count;";
         $shift += $count;
     }
@@ -185,6 +186,7 @@ sub render_struct_fields {
     for my $field ($type->findnodes('child::ld:field')) {
         my $name = $field->getAttribute('name') ||
                    $field->getAttribute('ld:anon-name');
+        $name = 'x' . $name if $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)/;
         render_item($field, $name);
         $lines[$#lines] .= ';';
     }
