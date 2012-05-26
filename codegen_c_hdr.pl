@@ -160,8 +160,8 @@ sub render_bitfield_as_enum {
         for my $item ($type->findnodes('child::ld:field')) {
             my $count = $item->getAttribute('count') || 1;
             my $name = $item->getAttribute('name');
-            if ($name and $count == 1) {
-                my $val = sprintf('0x%02X', (1 << $shift));
+            if ($name) {
+                my $val = sprintf('0x%02X', ((2 ** $count - 1) << $shift));
                 $name = $prefix . '_' . $name;
                 $name .= '_' while ($enum_seen{$name});
                 $enum_seen{$name} += 1;
@@ -570,6 +570,6 @@ close FH;
 
 # display warnings
 for (@lines_full) {
-	print "$_\n" if $_ =~ /TODO/;
+    print "$_\n" if $_ =~ /TODO/;
 }
 
