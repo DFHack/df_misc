@@ -132,6 +132,11 @@ sub render_global_bitfield {
 sub render_bitfield_fields {
     my ($type) = @_;
 
+    if (!$stdc) {
+        render_item_number($type, 'bitfield;');
+        return;
+    }
+
     my $shift = 0;
     for my $field ($type->findnodes('child::ld:field')) {
         my $count = $field->getAttribute('count') || 1;
