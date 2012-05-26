@@ -132,7 +132,7 @@ dasm.each_function_block(funcstart) { |baddr|
 	dasm.block_at(strblk).list.each { |di|
 		# find all lea reg, [ebx+XX]
 		next unless di.opcode.name == 'lea' and di.instruction.args[1].b.symbolic == :ebx
-		# compute the register value
+		# compute the loaded register value
 		bt = dasm.backtrace(di.instruction.args[0].symbolic, di.address, :include_start => true)
 		# if it maps to one of the scanned nextID strings, we won
 		if bt.length == 1 and str = strings[bt[0].reduce]
@@ -142,5 +142,6 @@ dasm.each_function_block(funcstart) { |baddr|
 		end
 	}
 }
+puts if $VERBOSE
 
 puts xml.sort

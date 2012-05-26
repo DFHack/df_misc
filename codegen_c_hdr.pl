@@ -188,28 +188,6 @@ sub render_global_objects {
 }
 
 
-sub render_item_simple {
-    my ($item, $name) = @_;
-    if ($item) {
-        my $meta = $item->getAttribute('ld:meta');
-        if ($meta and $meta eq 'pointer') {
-            my $pitem = $item->findnodes('child::ld:item')->[0];
-            if ($pitem) {
-                my $pmeta = $pitem->getAttribute('ld:meta');
-                if ($pmeta eq 'compound' or $pmeta eq 'pointer' or $pmeta eq 'static-array') {
-                    push @lines, "void*";
-                    $lines[$#lines] .= " $name" if ($name);
-                    return;
-                }
-            }
-        } elsif ($meta eq 'compound' and $item->getAttribute('ld:subtype') eq 'bitfield')  {
-            render_item_number($item, $name);
-            return;
-        }
-    }
-    return render_item($item, $name);
-}
-
 sub render_item {
     my ($item, $name) = @_;
     if (!$item) {
@@ -518,3 +496,9 @@ open FH, ">$output";
 print FH $hdr;
 print FH "$_\n" for @lines_full;
 close FH;
+
+# display warnings
+for (@lines_full) {
+	print "$_\n" if $_ =~ /TODO/;
+}
+
