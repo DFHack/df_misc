@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+# to generate linux headers, use
+#  perl codegen ./codegen.out.xml 1
+
 use strict;
 use warnings;
 
@@ -29,28 +32,6 @@ sub fwd_decl_class {
     $fwd_decl_class{$name} += 1;
     push @lines_full, "struct $name;";
 }
-
-sub merge_line($&$) {
-    my ($pre, $sub, $post) = @_;
-    my @lines2;
-    {
-        local @lines;
-        $sub->();
-        my $lfirst = $pre;
-        my $llast;
-        $lfirst .= shift(@lines) if (@lines);
-        if (@lines) {
-            $llast = pop(@lines) . $post;
-        } else {
-            $lfirst .= $post;
-        }
-        push @lines2, $lfirst;
-        push @lines2, @lines;
-        push @lines2, $llast if $llast;
-    }
-    push @lines, @lines2;
-}
-
 
 my %global_type_renderer = (
     'enum-type' => \&render_global_enum,
@@ -211,16 +192,16 @@ sub render_item_simple {
     my ($item, $name) = @_;
     if ($item) {
         my $meta = $item->getAttribute('ld:meta');
-	if ($meta and $meta eq 'pointer') {
-	    my $pitem = $item->findnodes('child::ld:item')->[0];
-	    if ($pitem) {
-		my $pmeta = $pitem->getAttribute('ld:meta');
-		if ($pmeta eq 'compound' or $pmeta eq 'pointer' or $pmeta eq 'static-array') {
-		    push @lines, "void*";
-		    $lines[$#lines] .= " $name" if ($name);
-		    return;
+        if ($meta and $meta eq 'pointer') {
+            my $pitem = $item->findnodes('child::ld:item')->[0];
+            if ($pitem) {
+                my $pmeta = $pitem->getAttribute('ld:meta');
+                if ($pmeta eq 'compound' or $pmeta eq 'pointer' or $pmeta eq 'static-array') {
+                    push @lines, "void*";
+                    $lines[$#lines] .= " $name" if ($name);
+                    return;
                 }
-	    }
+            }
         } elsif ($meta eq 'compound' and $item->getAttribute('ld:subtype') eq 'bitfield')  {
             render_item_number($item, $name);
             return;
@@ -254,8 +235,8 @@ sub render_item_global {
     my $subtype = $item->getAttribute('ld:subtype');
     my $type = $global_types{$typename};
     my $tname = $type->getAttribute('original-name') ||
-                    $type->getAttribute('type-name') ||
-                    $typename;
+    $type->getAttribute('type-name') ||
+    $typename;
 
     if ($subtype and $subtype eq 'enum') {
         #push @lines, "enum $typename $name;";  # this does not handle int16_t enums
@@ -313,10 +294,6 @@ sub render_item_compound {
         $lines[$#lines] .= " $name" if ($name);
 
     } elsif ($subtype eq 'enum') {
-        #push @lines, "enum {";
-        #indent { render_enum_fields($item); };
-        #push @lines, "}";
-        #$lines[$#lines] .= " $name" if ($name);
         render_item_number($item, $name);
 
     } else {
@@ -332,9 +309,32 @@ sub render_item_container {
     my $tg = $item->findnodes('child::ld:item')->[0];
     if ($tg) {
         if ($subtype eq 'stl_vector') {
-            merge_line('std_vector(', sub {
-                render_item_simple($tg, '');
-            }, ")");
+            my $tgm = $tg->getAttribute('ld:meta');
+            # historical_kills/killed_undead
+            $tgm = 'number' if ($tgm eq 'compound' and $tg->getAttribute('ld:subtype') eq 'bitfield');
+            if ($tgm eq 'pointer') {
+                my $ttg = $tg->findnodes('child::ld:item')->[0];
+                if ($ttg and $ttg->getAttribute('ld:meta') eq 'primitive' and $ttg->getAttribute('ld:subtype') eq 'stl-string') {
+                    push @lines, 'struct stl_vector_strptr';
+                } else {
+                    push @lines, 'struct stl_vector_ptr';
+                }
+            } elsif ($tgm eq 'number') {
+                my $tgst = $tg->getAttribute('ld:subtype');
+                $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
+                push @lines, "struct stl_vector_$tgst";
+            } elsif ($tgm eq 'global') {
+                my $tgt = $global_types{$tg->getAttribute('type-name')};
+                my $tgtm = $tgt->getAttribute('ld:meta');
+                if ($tgtm eq 'enum-type' or $tgtm eq 'bitfield-type') {
+                    my $tgtst = $tgt->getAttribute('base-type') || 'int32_t';
+                    push @lines, "struct stl_vector_$tgtst";
+                } else {
+                    push @lines, "// TODO struct stl_vector_global-$tgtm";
+                }
+            } else {
+                push @lines, "// TODO struct stl_vector-$tgm";
+            }
         } elsif ($subtype eq 'df_linked_list') {
             push @lines, 'struct df_linked_list';
         } elsif ($subtype eq 'df_array') {
@@ -346,9 +346,9 @@ sub render_item_container {
         }
     } else {
         if ($subtype eq 'stl_vector') {
-            push @lines, 'std_vector(void*)';
+            push @lines, 'struct stl_vector_ptr';
         } elsif ($subtype eq 'stl_bit_vector') {
-            push @lines, 'std_vector(bool)';
+            push @lines, 'struct stl_vector_bool';
         } elsif ($subtype eq 'df_flagarray') {
             push @lines, 'struct df_flagarray';
         } else {
@@ -382,7 +382,7 @@ sub render_item_primitive {
 
     my $subtype = $item->getAttribute('ld:subtype');
     if ($subtype eq 'stl-string') {
-        push @lines, "std_string";
+        push @lines, "struct stl_string";
         $lines[$#lines] .= " $name" if ($name);
     } else {
         print "no render primitive $subtype\n";
@@ -423,6 +423,8 @@ for my $name (sort { $a cmp $b } keys %global_types) {
 
 render_global_objects($doc->findnodes('/ld:data-definition/ld:global-object'));
 
+my $linux = $ARGV[1] ? 1 : 0;
+
 my $hdr = <<EOS;
 typedef char      int8_t;
 typedef short     int16_t;
@@ -432,12 +434,15 @@ typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
 typedef unsigned long long uint64_t;
-typedef char bool;
 
-#if 1
+EOS
 
+my $vecpad = '';
+
+if (!$linux) {
+$hdr .= <<EOS;
 // Windows STL
-struct std_string {
+struct stl_string {
     union {
         char buf[16];
         char *ptr;
@@ -447,21 +452,51 @@ struct std_string {
     int32_t pad;
 };
 
-#define std_vector(type) struct { type *ptr; type *endptr; type *endalloc; int32_t pad; }
+struct stl_vector_bool {
+    char *ptr;
+    char *endptr;
+    char *endalloc;
+    int32_t pad;
+    int size;
+};
 
-#else
+EOS
+$vecpad = "    int32_t pad;\n";
 
+} else {
+$hdr .= <<EOS;
 // Linux Glibc STL
-struct std_string {
+struct stl_string {
     char *ptr;
 };
 
-#define std_vector(type) struct { type *ptr; type *endptr; type *endalloc; }
+struct stl_vector_bool {
+    uint32_t *ptr;
+    int32_t sbit;
+    uint32_t *endptr;
+    int32_t ebit;
+    uint32_t *endalloc;
+};
 
-#endif
+EOS
+}
 
-typedef struct std_string std_string;
+foreach my $vtype ('ptr', 'strptr', 'int32_t', 'uint32_t', 'int16_t', 'uint16_t', 'int8_t', 'uint8_t') {
+    my $ctype = $vtype . ' ';
+    $ctype = 'void *' if ($vtype eq 'ptr');
+    $ctype = 'struct stl_string *' if ($vtype eq 'strptr');
 
+$hdr .= <<EOS;
+struct stl_vector_$vtype {
+    $ctype*ptr;
+    $ctype*endptr;
+    $ctype*endalloc;
+$vecpad};
+
+EOS
+}
+
+$hdr .= <<EOS;
 struct df_linked_list {
     void *item;
     void *prev;
@@ -477,7 +512,6 @@ struct df_flagarray {
     uint8_t *ptr;
     uint32_t len;
 };
-
 EOS
 
 open FH, ">$output";
