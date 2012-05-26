@@ -137,7 +137,7 @@ sub render_bitfield_fields {
         my $count = $field->getAttribute('count') || 1;
         my $name = $field->getAttribute('name');
         $name = $field->getAttribute('ld:anon-name') || '' if (!$name);
-        $name = '_' . $name if !$stdc and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
+        $name = '_' . $name if !$stdc and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_|^effects$/;
         push @lines, "int $name:$count;";
         $shift += $count;
     }
@@ -187,7 +187,7 @@ sub render_struct_fields {
     for my $field ($type->findnodes('child::ld:field')) {
         my $name = $field->getAttribute('name') ||
                    $field->getAttribute('ld:anon-name');
-        $name = '_' . $name if !$stdc and $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
+        $name = '_' . $name if !$stdc and $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_|^effects$/;
         render_item($field, $name);
         $lines[$#lines] .= ';';
     }
@@ -330,19 +330,19 @@ sub render_item_container {
                     my $tgtst = $tgt->getAttribute('base-type') || 'int32_t';
                     push @lines, "struct stl_vector_$tgtst";
                 } else {
-                    push @lines, "// TODO struct stl_vector_global-$tgtm";
+                    push @lines, "// TODO in $prefix: struct stl_vector_global-$tgtm";
                 }
             } else {
-                push @lines, "// TODO struct stl_vector-$tgm";
+                push @lines, "// TODO in $prefix: struct stl_vector-$tgm";
             }
         } elsif ($subtype eq 'df_linked_list') {
             push @lines, 'struct df_linked_list';
         } elsif ($subtype eq 'df_array') {
             push @lines, 'struct df_array';
         } elsif ($subtype eq 'stl_deque') {
-            push @lines, "// TODO struct stl_deque";
+            push @lines, "// TODO in $prefix: struct stl_deque";
         } else {
-            push @lines, "// TODO container $subtype";
+            push @lines, "// TODO in $prefix: container $subtype";
         }
     } else {
         if ($subtype eq 'stl_vector') {
@@ -352,7 +352,7 @@ sub render_item_container {
         } elsif ($subtype eq 'df_flagarray') {
             push @lines, 'struct df_flagarray';
         } else {
-            push @lines, "// TODO container_notg $subtype";
+            push @lines, "// TODO in $prefix: container_notg $subtype";
         }
     }
     $lines[$#lines] .= " $name" if ($name);
