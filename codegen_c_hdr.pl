@@ -340,7 +340,7 @@ sub render_item_container {
         } elsif ($subtype eq 'df_array') {
             push @lines, 'struct df_array';
         } elsif ($subtype eq 'stl_deque') {
-            push @lines, "// TODO in $prefix: struct stl_deque";
+            push @lines, 'struct stl_deque';
         } else {
             push @lines, "// TODO in $prefix: container $subtype";
         }
@@ -447,6 +447,15 @@ struct stl_string {
     int32_t pad;
 };
 
+struct stl_deque {
+    void *proxy;
+    void *map;
+    int32_t map_size;
+    int32_t off;
+    int32_t size;
+    int32_t pad;
+};
+
 struct stl_vector_bool {
     char *ptr;
     char *endptr;
@@ -463,6 +472,19 @@ $hdr .= <<EOS;
 // Linux Glibc STL
 struct stl_string {
     char *ptr;
+};
+
+struct stl_deque {
+    void *map;
+    int32_t size;
+    void *start_cur;
+    void *start_first;
+    void *start_last;
+    void *start_map;
+    void *end_cur;
+    void *end_first;
+    void *end_last;
+    void *end_map;
 };
 
 struct stl_vector_bool {
