@@ -6,10 +6,10 @@
 
 # default is generating IDA-compatible headers
 # to generate full C headers, use
-#  perl codegen stdc
+#  perl codegen --stdc
 
 # to generate linux headers, use
-#  perl codegen linux
+#  perl codegen --linux
 
 use strict;
 use warnings;
