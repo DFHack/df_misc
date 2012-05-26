@@ -133,6 +133,7 @@ sub render_bitfield_fields {
     my ($type) = @_;
 
     if (!$stdc) {
+        render_bitfield_as_enum($type);
         render_item_number($type, 'bitfield;');
         return;
     }
@@ -146,6 +147,32 @@ sub render_bitfield_fields {
         push @lines, "int $name:$count;";
         $shift += $count;
     }
+}
+sub render_bitfield_as_enum {
+    # IDA-only method
+    # instead of struct { a:1; b:2; c:1; d:1; }, render enum { a=0x01, c=0x08, d=0x10 };
+    my ($type) = @_;
+    local @lines;
+
+    push @lines, "enum ${prefix}_enum {";
+    indent {
+        my $shift = 0;
+        for my $item ($type->findnodes('child::ld:field')) {
+            my $count = $item->getAttribute('count') || 1;
+            my $name = $item->getAttribute('name');
+            if ($name and $count == 1) {
+                my $val = sprintf('0x%02X', (1 << $shift));
+                $name = $prefix . '_' . $name;
+                $name .= '_' while ($enum_seen{$name});
+                $enum_seen{$name} += 1;
+                push @lines, "$name=$val,";
+            }
+            $shift += $count;
+        }
+    };
+    chop $lines[$#lines] if (@lines);      # remove last coma
+    push @lines, "};\n";
+    push @lines_full, @lines;
 }
 
 
