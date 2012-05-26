@@ -117,7 +117,7 @@ sub render_bitfield_fields {
         my $count = $field->getAttribute('count') || 1;
         my $name = $field->getAttribute('name');
         $name = $field->getAttribute('ld:anon-name') || '' if (!$name);
-        $name = 'x' . $name if $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)/;
+        $name = '_' . $name if $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
         push @lines, "int $name:$count;";
         $shift += $count;
     }
@@ -147,7 +147,7 @@ sub render_global_class {
 
     my $has_rtti = ($type->getAttribute('ld:meta') eq 'class-type');
 
-    $prefix = $name;
+    local $prefix = $name;
     local @lines;
     push @lines, "struct $rtti_name {";
     indent {
@@ -167,7 +167,7 @@ sub render_struct_fields {
     for my $field ($type->findnodes('child::ld:field')) {
         my $name = $field->getAttribute('name') ||
                    $field->getAttribute('ld:anon-name');
-        $name = 'x' . $name if $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)/;
+        $name = '_' . $name if $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
         render_item($field, $name);
         $lines[$#lines] .= ';';
     }
