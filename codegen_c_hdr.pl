@@ -321,6 +321,7 @@ sub render_item_container {
             } elsif ($tgm eq 'number') {
                 my $tgst = $tg->getAttribute('ld:subtype');
                 $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
+                $tgst = 'int8_t' if $tgst eq 'bool';    # dont confuse with stl-bit-vector
                 push @lines, "struct stl_vector_$tgst";
             } elsif ($tgm eq 'global') {
                 my $tgt = $global_types{$tg->getAttribute('type-name')};
