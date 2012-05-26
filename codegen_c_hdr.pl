@@ -1,10 +1,29 @@
 #!/usr/bin/perl
 
+# this script generates C headers from df-structures codegen.out.xml
+
+# input is 1st argument or 'codegen/codegen.out.xml'
+
+# default is generating IDA-compatible headers
+# to generate full C headers, use
+#  perl codegen stdc
+
 # to generate linux headers, use
-#  perl codegen ./codegen.out.xml 1
+#  perl codegen linux
 
 use strict;
 use warnings;
+
+
+my $linux = grep { $_ eq '--linux' } @ARGV;
+   @ARGV  = grep { $_ ne '--linux' } @ARGV if $linux;
+
+my $stdc = grep { $_ eq '--stdc' } @ARGV;
+   @ARGV = grep { $_ ne '--stdc' } @ARGV if $stdc;
+
+my $input = $ARGV[0] || 'codegen/codegen.out.xml';
+my $output = $ARGV[1] || 'codegen.h';
+
 
 use XML::LibXML;
 
@@ -70,6 +89,7 @@ sub render_global_enum {
 sub render_enum_fields {
     my ($type) = @_;
 
+    %enum_seen = () if $stdc;
     my $value = -1;
     for my $item ($type->findnodes('child::enum-item')) {
         $value += 1;
@@ -77,7 +97,7 @@ sub render_enum_fields {
         my $elemname = $item->getAttribute('name'); # || "unk_$value";
 
         if ($elemname) {
-            $elemname = $prefix . '_' . $elemname;
+            $elemname = $prefix . '_' . $elemname if (!$stdc);
             $elemname .= '_' while ($enum_seen{$elemname});
             $enum_seen{$elemname} += 1;
             if ($value == $newvalue) {
@@ -117,7 +137,7 @@ sub render_bitfield_fields {
         my $count = $field->getAttribute('count') || 1;
         my $name = $field->getAttribute('name');
         $name = $field->getAttribute('ld:anon-name') || '' if (!$name);
-        $name = '_' . $name if $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
+        $name = '_' . $name if !$stdc and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
         push @lines, "int $name:$count;";
         $shift += $count;
     }
@@ -167,7 +187,7 @@ sub render_struct_fields {
     for my $field ($type->findnodes('child::ld:field')) {
         my $name = $field->getAttribute('name') ||
                    $field->getAttribute('ld:anon-name');
-        $name = '_' . $name if $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
+        $name = '_' . $name if !$stdc and $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_/;
         render_item($field, $name);
         $lines[$#lines] .= ';';
     }
@@ -254,7 +274,8 @@ sub render_item_compound {
     my $subtype = $item->getAttribute('ld:subtype');
     if (!$subtype || $subtype eq 'bitfield') {
         my $tdef = $item->getAttribute('ld:typedef-name') || 'anon';
-        my $sname = $prefix . '_' . $tdef;
+        my $sname = $tdef;
+        $sname = $prefix . '_' . $sname if $stdc;
         if ($item->getAttribute('is-union')) {
             push @lines, "union {";
         } else {
@@ -382,9 +403,6 @@ sub render_item_bytes {
     }
 }
 
-my $input = $ARGV[0] || 'codegen/codegen.out.xml';
-my $output = 'codegen.h';
-
 my $doc = XML::LibXML->new()->parse_file($input);
 $global_types{$_->getAttribute('type-name')} = $_ foreach $doc->findnodes('/ld:data-definition/ld:global-type');
 
@@ -400,8 +418,6 @@ for my $name (sort { $a cmp $b } keys %global_types) {
 }
 
 render_global_objects($doc->findnodes('/ld:data-definition/ld:global-object'));
-
-my $linux = $ARGV[1] ? 1 : 0;
 
 my $hdr = <<EOS;
 typedef char      int8_t;
