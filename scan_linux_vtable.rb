@@ -110,7 +110,7 @@ vtable.sort.each { |str, vaddr|
 					ninsns += dasm.block_at(baddr).list.length
 				}
 			end
-			puts "    <vtable-function addr='%x' ninsns='%d'/>" % [vf, ninsns]
+			puts "    <vtable-function addr='0x%x' ninsns='%d'/>" % [vf, ninsns]
 			a += 4
 		end
 		puts "</vtable-address>"
