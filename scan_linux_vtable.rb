@@ -1,5 +1,9 @@
 require 'metasm'
 
+dumpfuncs = ARGV.delete '--dumpfuncs'
+dumpfuncinfo = ARGV.delete '--dumpfuncinfo'
+dumpfuncs = true if dumpfuncinfo
+
 puts 'read file' if $VERBOSE
 binpath = ARGV.shift || 'libs/Dwarf_Fortress'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
@@ -93,6 +97,23 @@ scanptrs(file_raw, sptr).each { |off, str|
 vtable.sort.each { |str, vaddr|
 	if vaddr =~ / or /
 		puts "<!-- CONFLICT vtable-address name='#{str}' value='#{vaddr}'/ -->"
+	elsif dumpfuncs
+		puts "<vtable-address name='#{str}' value='#{vaddr}'>"
+		a = vaddr.to_i(16)
+		loop do
+			vf = dasm.decode_dword(a)
+			break if vf < text[0] or vf > text[0]+text[1]
+			ninsns = 0
+			if dumpfuncinfo
+				dasm.disassemble_fast(vf)
+				dasm.each_function_block(vf) { |baddr, bto|
+					ninsns += dasm.block_at(baddr).list.length
+				}
+			end
+			puts "    <vtable-function addr='%x' ninsns='%d'/>" % [vf, ninsns]
+			a += 4
+		end
+		puts "</vtable-address>"
 	else
 		puts "<vtable-address name='#{str}' value='#{vaddr}'/>"
 	end
