@@ -4,11 +4,9 @@ dumpfuncs = ARGV.delete '--dumpfuncs'
 dumpfuncinfo = ARGV.delete '--dumpfuncinfo'
 dumpfuncs = true if dumpfuncinfo
 
-puts 'read file' if $VERBOSE
 binpath = ARGV.shift || 'libs/Dwarf_Fortress'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
 
-puts 'scan *st' if $VERBOSE
 strings = {}
 dasm.pattern_scan(/\d+\w+st\0/) { |addr|
 	strings[addr] = dasm.decode_strz(addr)
@@ -87,34 +85,42 @@ scanptrs(file_raw, sptr).each { |off, str|
 	next if vf < text[0] or vf > text[0]+text[1]
 
 	s = demangle_str(str)
-	if vtable[s]
-		vtable[s] += ' or 0x%x' % vaddr
-	else
-		vtable[s] = '0x%x' % vaddr
-	end
+	vtable[s] ||= []
+	vtable[s] << vaddr
 }
 
-vtable.sort.each { |str, vaddr|
-	if vaddr =~ / or /
-		puts "<!-- CONFLICT vtable-address name='#{str}' value='#{vaddr}'/ -->"
+vtable.sort.each { |str, vaddrs|
+	if vaddrs.length > 1
+		# conflict
+		# it *seems* that gcc layout is <0> <typeinfo_ptr> <vtable ptr0> <vtable ptr1>, so check that 0
+		better = vaddrs.find_all { |va| dasm.decode_dword(va-8) == 0 }
+		puts "conflict: original = #{vaddrs.map { |va| '0x%x' % va }.join('|')}, better = #{better.map { |va| '0x%x' % va }.join('|')}" if $VERBOSE
+		vaddrs = better if better.length == 1
+	end
+	if vaddrs.length != 1
+		puts "<!-- CONFLICT vtable-address name='#{str}' value='#{vaddrs.map { |va| '0x%x' % va }.join(' or ')}'/ -->"
 	elsif dumpfuncs
-		puts "<vtable-address name='#{str}' value='#{vaddr}'>"
-		a = vaddr.to_i(16)
+		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'>"
+		a = vaddrs[0]
+		i = 0
 		loop do
 			vf = dasm.decode_dword(a)
 			break if vf < text[0] or vf > text[0]+text[1]
-			ninsns = 0
 			if dumpfuncinfo
+				ninsns = 0
 				dasm.disassemble_fast(vf)
 				dasm.each_function_block(vf) { |baddr, bto|
 					ninsns += dasm.block_at(baddr).list.length
 				}
+				puts "    <vtable-function index='%d' addr='0x%x' ninsns='%d'/>" % [i, vf, ninsns]
+			else
+				puts "    <vtable-function index='%d' addr='0x%x'/>" % [i, vf]
 			end
-			puts "    <vtable-function addr='0x%x' ninsns='%d'/>" % [vf, ninsns]
 			a += 4
+			i += 1
 		end
 		puts "</vtable-address>"
 	else
-		puts "<vtable-address name='#{str}' value='#{vaddr}'/>"
+		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'/>"
 	end
 }
