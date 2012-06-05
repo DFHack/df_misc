@@ -4,6 +4,8 @@ require 'metasm'
 # it lists vmethods inside, with the number of instructions in the method
 # useful to check for added/moved vmethods in a new df version
 
+dumpasm = ARGV.delete '--asm'
+
 abort 'usage: inspect_vtable DwarfFortress.exe 0x121212' if ARGV.length < 2
 
 binpath = ARGV.shift
@@ -27,6 +29,7 @@ ARGV.each { |va|
 			ninsns += dasm.block_at(baddr).list.length
 		}
 		puts "    <vtable-function index='%d' addr='0x%x' ninsns='%d'/>" % [i, vf, ninsns]
+		puts dasm.flatten_graph(vf) if dumpasm
 		vaddr += 4
 		i += 1
 	end
