@@ -1,8 +1,6 @@
 require 'metasm'
 
 dumpfuncs = ARGV.delete '--dumpfuncs'
-dumpfuncinfo = ARGV.delete '--dumpfuncinfo'
-dumpfuncs = true if dumpfuncinfo
 
 binpath = ARGV.shift || 'libs/Dwarf_Fortress'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
@@ -106,16 +104,7 @@ vtable.sort.each { |str, vaddrs|
 		loop do
 			vf = dasm.decode_dword(a)
 			break if vf < text[0] or vf > text[0]+text[1]
-			if dumpfuncinfo
-				ninsns = 0
-				dasm.disassemble_fast(vf)
-				dasm.each_function_block(vf) { |baddr, bto|
-					ninsns += dasm.block_at(baddr).list.length
-				}
-				puts "    <vtable-function index='%d' addr='0x%x' ninsns='%d'/>" % [i, vf, ninsns]
-			else
-				puts "    <vtable-function index='%d' addr='0x%x'/>" % [i, vf]
-			end
+			puts "    <vtable-function index='%d' addr='0x%x'/>" % [i, vf]
 			a += 4
 			i += 1
 		end
