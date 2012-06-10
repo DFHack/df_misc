@@ -89,7 +89,6 @@ sub render_global_enum {
 sub render_enum_fields {
     my ($type) = @_;
 
-    %enum_seen = () if $stdc;
     my $value = -1;
     for my $item ($type->findnodes('child::enum-item')) {
         $value += 1;
