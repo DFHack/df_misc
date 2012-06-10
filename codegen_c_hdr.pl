@@ -200,16 +200,23 @@ sub render_global_class {
 
     local $prefix = $name;
     local @lines;
+
+    if ($has_rtti and !$parent) {
+        my $vms = $type->findnodes('child::virtual-methods')->[0];
+        render_class_vtable($name, $vms);
+    }
+
     push @lines, "struct $rtti_name {";
     indent {
         if ($parent) {
             push @lines, "struct $parent super;";
         } elsif ($has_rtti) {
-            push @lines, "void **vtable;";
+            push @lines, "struct vtable_$name *vtable;";
         }
         render_struct_fields($type);
     };
     push @lines, "};\n";
+
     push @lines_full, @lines;
 }
 sub render_struct_fields {
@@ -222,6 +229,29 @@ sub render_struct_fields {
         render_item($field, $name);
         $lines[$#lines] .= ';';
     }
+}
+sub render_class_vtable {
+    my ($name, $vms) = @_;
+
+    push @lines, "struct vtable_$name {";
+    if ($vms) {
+        indent {
+            my $voff = 0;
+            for my $meth ($vms->findnodes('child::vmethod')) {
+                my $name = $meth->getAttribute('name') || $meth->getAttribute('ld:anon-name') || "vmeth_$voff";
+                # TODO actual prototype ?
+                push @lines, "void *$name;";
+                $voff += 4;
+
+                if ($linux and $meth->getAttribute('is-destructor')) {
+                    # linux destructor has 2 slots
+                    push @lines, 'void *destructor2;';
+                    $voff += 4;
+                }
+            }
+        };
+    }
+    push @lines, "};";
 }
 
 sub render_global_objects {
