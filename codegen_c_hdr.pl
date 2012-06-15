@@ -234,8 +234,8 @@ sub render_class_vtable {
     my ($name, $vms) = @_;
 
     push @lines, "struct vtable_$name {";
-    if ($vms) {
-        indent {
+    indent {
+        if ($vms) {
             my $voff = 0;
             for my $meth ($vms->findnodes('child::vmethod')) {
                 my $name = $meth->getAttribute('name') || $meth->getAttribute('ld:anon-name') || "vmeth_$voff";
@@ -249,8 +249,11 @@ sub render_class_vtable {
                     $voff += 4;
                 }
             }
-        };
-    }
+        } else {
+            # ida doesnt like empty structs
+            push @lines, 'void *dummy;' if (!$stdc);
+        }
+    };
     push @lines, "};";
 }
 
