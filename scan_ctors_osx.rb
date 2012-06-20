@@ -18,9 +18,9 @@ addr = ctor[1]
 	addr += 4
 }
 
-globals = []
+puts ctorlist.map { |ct| "<ctor addr='0x%x' len='%d'/>" % [ct, dasm.function_blocks(ct).length] } if $VERBOSE
 
-big = ctorlist.sort_by { |c| dasm.function_blocks(c).length }.last
+big = ctorlist.sort_by { |ct| dasm.function_blocks(ct).length }.last
 puts "big ctor at %x" % big if $VERBOSE
 
 # binding for getpc_ebx
@@ -37,13 +37,22 @@ dasm.each_function_block(big) { |a|
 }
 atexit = called.sort_by { |k, v| v }.last[0]
 
+globals = []
+
 ctorlist.each { |ct|
 	ctorlen = dasm.function_blocks(ct).length
-	next if ctorlen < 6	# skip 'small' ctor funcs
+	#next if ctorlen < 6	# skip 'small' ctor funcs
 	dasm.each_function_block(ct) { |a|
 		call = dasm.block_at(a).list[-1]
 		if call.opcode.name == 'call' and call.instruction.args[0].to_s == atexit
+
+			arg1 = dasm.backtrace(Metasm::Indirection[[:esp, :+, 0], 4], call.address)[0].reduce
 			arg2 = dasm.backtrace(Metasm::Indirection[[:esp, :+, 4], 4], call.address)[0].reduce
+
+			next if arg1.to_s =~ /^__Z/	# std destructors
+			next if arg1 == arg2	# ??
+			next if arg2 == 0	# ??
+
 			globals << [ct, arg2]
 		end
 	}
