@@ -46,19 +46,18 @@ ctorlist.each { |ct|
 		call = dasm.block_at(a).list[-1]
 		if call.opcode.name == 'call' and call.instruction.args[0].to_s == atexit
 
-			arg1 = dasm.backtrace(Metasm::Indirection[[:esp, :+, 0], 4], call.address)[0].reduce
+			arg1 = dasm.backtrace(Metasm::Indirection[[:esp], 4], call.address)[0].reduce
 			arg2 = dasm.backtrace(Metasm::Indirection[[:esp, :+, 4], 4], call.address)[0].reduce
 
 			next if arg1.to_s =~ /^__Z/	# std destructors
-			next if arg1 == arg2	# ??
-			next if arg2 == 0	# ??
+			#next if arg2 == 0
 
-			globals << [ct, arg2]
+			globals << [ct, arg2, call.address]
 		end
 	}
 }
 
-globals.each { |ct, obj|
-	len = globals.map { |c, o| o }.sort.find { |o| o > obj }.to_i - obj
-	puts '<global-object ctor="sub_%xh" name="obj_%X" offset="0x%x" size="%d"/>' % [ct, obj, obj, len]
+globals.each { |ct, obj, ca|
+	len = globals.map { |c, o, a| o }.sort.find { |o| o > obj }.to_i - obj
+	puts '<global-object ctorlist="sub_%xh" callsite="0x%x" name="obj_%X" offset="0x%x" size="%d"/>' % [ct, ca, obj, obj, len]
 }
