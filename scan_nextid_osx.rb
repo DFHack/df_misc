@@ -121,7 +121,7 @@ dasm.each_function_block(funcstart) { |baddr|
 	raise 'no cmp/jl?' if cmp.opcode.name != 'cmp'
 	# find the memory pointer used for comparison, this is the nextid value
 	ptr = cmp.instruction.args[1].symbolic.target
-	id_addr = dasm.backtrace(ptr, cmp.address).map { |bt| bt.reduce }.grep(Integer).first
+	id_addr = dasm.normalize(dasm.backtrace(ptr, cmp.address).first)
 
 	# now we assume we have only 2 blocks:
 	# one with the 2 lea, and it jumps to the block with the jl
