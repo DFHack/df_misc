@@ -61,6 +61,8 @@ end
 # typeinfoptr+4 mangled_classname_ptr
 
 
+puts "found #{strings.length} strings" if $VERBOSE
+
 # find all pointers to what looks like mangled structure name ("06unitst")
 file_raw = File.read(binpath)
 
@@ -70,8 +72,10 @@ scanptrs(file_raw, strings).each { |off, str|
 	sptr[vaddr] = str
 }
 
+puts "found #{sptr.length} str ptrs" if $VERBOSE
+
 # find [address, length] of the .text section
-text = dasm.section_info.find { |n, a, l, i| n == '.text' }.values_at(1, 2)
+text = (dasm.section_info.assoc('.text') || dasm.section_info.assoc('__text')).values_at(1, 2)
 
 # vtable 
 vtable = {}
@@ -79,8 +83,8 @@ scanptrs(file_raw, sptr).each { |off, str|
 	vaddr = dasm.fileoff_to_addr(off) + 4
 
 	# check that we have an actual function pointer here (eg into .text)
-	vf = dasm.decode_dword(vaddr)
-	next if vf < text[0] or vf > text[0]+text[1]
+	vf = dasm.normalize(dasm.decode_dword(vaddr))
+	next if not vf.kind_of?(Integer) or vf < text[0] or vf > text[0]+text[1]
 
 	s = demangle_str(str)
 	vtable[s] ||= []
