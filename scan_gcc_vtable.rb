@@ -106,8 +106,8 @@ vtable.sort.each { |str, vaddrs|
 		a = vaddrs[0]
 		i = 0
 		loop do
-			vf = dasm.decode_dword(a)
-			break if vf < text[0] or vf > text[0]+text[1]
+			vf = dasm.normalize(dasm.decode_dword(a))
+			break if not vf.kind_of?(Integer) or vf < text[0] or vf > text[0]+text[1]
 			puts "    <vtable-function index='%d' addr='0x%x'/>" % [i, vf]
 			a += 4
 			i += 1
