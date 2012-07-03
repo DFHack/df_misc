@@ -28,7 +28,7 @@ ARGV.each { |va|
 		dasm.each_function_block(vf) { |baddr, bto|
 			ninsns += dasm.block_at(baddr).list.length
 		}
-		puts "    <vtable-function index='%d' addr='0x%x' ninsns='%d'/>" % [i, vf, ninsns]
+		puts "    <vtable-function index='%d' voffset='0x%x' addr='0x%x' ninsns='%d'/>" % [i, 4*i, vf, ninsns]
 		puts dasm.flatten_graph(vf) if dumpasm
 		vaddr += 4
 		i += 1
