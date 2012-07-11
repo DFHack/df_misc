@@ -89,24 +89,25 @@ sub render_global_enum {
 sub render_enum_fields {
     my ($type) = @_;
 
-    my $value = -1;
+    my $value = 0;
+    my $nextvalue = 0;
     for my $item ($type->findnodes('child::enum-item')) {
-        $value += 1;
-        my $newvalue = $item->getAttribute('value') || $value;
+        $value = $item->getAttribute('value') || $value;
         my $elemname = $item->getAttribute('name'); # || "unk_$value";
 
         if ($elemname) {
             $elemname = $prefix . '_' . $elemname if (!$stdc);
             $elemname .= '_' while ($enum_seen{$elemname});
             $enum_seen{$elemname} += 1;
-            if ($value == $newvalue) {
+            if ($value == $nextvalue) {
                 push @lines, "$elemname,";
             } else {
-                push @lines, "$elemname = $newvalue,";
+                push @lines, "$elemname = $value,";
             }
+            $nextvalue = $value+1;
         }
 
-        $value = $newvalue;
+        $value += 1;
     }
 
     chop $lines[$#lines] if (@lines);      # remove last coma
