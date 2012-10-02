@@ -1,6 +1,6 @@
 
 # returns a list of addresses of pointers to target from the code section
-def scan_code_xrefs(dasm, target, threshold=0x40)
+def scan_code_xrefs(dasm, target, threshold=0x400)
 	if dasm.program.kind_of?(Metasm::MachO)
 		return scan_xrefs_osx(dasm, target, threshold)
 	end
