@@ -1,5 +1,8 @@
 require 'metasm'
 
+$: << File.dirname(__FILE__)
+require 'osx_scanxrefs'
+
 # metasm script to find all 'job_next_id' 'building_next_id' etc globals in dwarf fortress
 # tested in 34.07, linux/windows
 
@@ -30,8 +33,7 @@ dasm.pattern_scan(/Load Game: Invalid (\w|\s)* ID Number/) { |addr|
 xml = []
 puts 'dasm xrefs' if $VERBOSE
 strings.each { |addr, str|
-	xo = nil
-	dasm.pattern_scan([addr].pack('L')) { |xaddr| xo = xaddr }
+	xo = scan_code_xrefs(dasm, addr)[0]
 	if !xo
 		puts "no xref for #{str.inspect}"
 		next

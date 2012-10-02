@@ -4,6 +4,9 @@ require 'metasm'
 # tested in 34.10, osx
 # run with ruby -v for debug msgs
 
+$: << File.dirname(__FILE__)
+require 'osx_scanxrefs'
+
 # code has pattern:
 #  push ebp
 #  push edi
@@ -28,86 +31,35 @@ dasm.pattern_scan(/Load Game: Invalid (\w|\s)* ID Number/) { |addr|
 	strings[addr] = dasm.decode_strz(addr)
 }
 
-puts 'scan geteip' if $VERBOSE
-getip = dasm.pattern_scan(/\x8b\x1c\x24\xc3/)[0]
-dasm.disassemble(getip)
-
-puts 'scan 1st data xref' if $VERBOSE
-
-#
-# due to how osx binaries are, we cant easily check for xrefs
-#
-# so we'll use the fact that this function starts with a
-#  call put_my_retaddr_in_ebx
-# and quickly does
-#  lea reg, [ebx + a_job_nextid - lastretaddr]
-#
-# so we scan for this constant ^, by reading every dword in the
-# binary (val), adding its own address (which is an approximation
-# of lastretaddr), and checking if the result is close to a_job_nextid
-# 
-# the 0x40 constant assumes that the 'lea' is no more than 0x40 bytes
-# after the call getip
-#
-# also, do the scan in C for speed (dont scan 25Mo in a ruby loop)
-#
-dldr = Metasm::DynLdr
-dldr.new_func_c <<EOC
-// delta = &a_nextid - &.text
-unsigned scanaround(unsigned delta, char*str, unsigned strlen) {
-	unsigned i;
-	unsigned val;
-	for (i=strlen-4 ; i ; --i) {
-		val = i+4+*(unsigned*)(str+i);
-		if (val > delta && val < delta+0x40)
-			return i;
-	}
-	return 0;
-}
-EOC
-puts 'jitted' if $VERBOSE
-
-# assume all code is in the same segment as getip
-text = dasm.get_section_at(getip)
-sec_raw = text[0].data.to_str
-puts 'raw section read' if $VERBOSE
-
-# expects JobID to be the first string
-off = sec_raw.length
 a_jobid = strings.index('Load Game: Invalid Job ID Number, ')
-delta = a_jobid - text[1]
+addr = scan_code_xrefs(dasm, a_jobid)[0]
+raise 'no Invalid Job ID xref' if not addr
+
 funcstart = nil
-until funcstart
-	# find something that may be a getip+str xref
-	off = dldr.scanaround(delta, sec_raw, off)
-	puts 'scanaround %x %x' % [off, text[1]+off] if $VERBOSE
-	raise 'scanaround failed' if off == 0
-	addr = text[1] + off
-	0x100.times { |i|
-		# on linux/windows, the code loops around the xref, so we can simply
-		# disassemble from the xref. Here on osx, this is not the case, so scan for
-		# function prologue (4 push reg or more)
-		if dasm.decode_byte(addr-i) & 0xf0 == 0x50 and
-		   dasm.decode_byte(addr-i+1) & 0xf0 == 0x50 and
-		   dasm.decode_byte(addr-i+2) & 0xf0 == 0x50 and
-		   dasm.decode_byte(addr-i+3) & 0xf0 == 0x50 and
-		   dasm.decode_byte(addr-i-1) & 0xf0 != 0x50	# ensure this is the 1st push
-			puts 'funcstart %x' % (addr-i) if $VERBOSE
-			dasm.disassemble_fast(addr-i)
-			# check we actually get an xref to 'Invalid Job ID'
-			if getstr = dasm.di_including(addr) and getstr.opcode.name == 'lea'
-				# find the value of lea's reg arg
-				a0 = getstr.instruction.args[0].symbolic
-				bt = dasm.backtrace(a0, getstr.address, :include_start => true)
-				if bt.length == 1 and bt[0].reduce == a_jobid
-					# lea loads the address of the Job ID string !
-					funcstart = addr-i
-					break
-				end
+0x100.times { |i|
+	# on linux/windows, the code loops around the xref, so we can simply
+	# disassemble from the xref. Here on osx, this is not the case, so scan for
+	# function prologue (4 push reg or more)
+	if dasm.decode_byte(addr-i) & 0xf0 == 0x50 and
+		dasm.decode_byte(addr-i+1) & 0xf0 == 0x50 and
+		dasm.decode_byte(addr-i+2) & 0xf0 == 0x50 and
+		dasm.decode_byte(addr-i+3) & 0xf0 == 0x50 and
+		dasm.decode_byte(addr-i-1) & 0xf0 != 0x50	# ensure this is the 1st push
+		puts 'funcstart %x' % (addr-i) if $VERBOSE
+		dasm.disassemble_fast(addr-i)
+		# check we actually get an xref to 'Invalid Job ID'
+		if getstr = dasm.di_including(addr) and getstr.opcode.name == 'lea'
+			# find the value of lea's reg arg
+			a0 = getstr.instruction.args[0].symbolic
+			bt = dasm.backtrace(a0, getstr.address, :include_start => true)
+			if bt.length == 1 and bt[0].reduce == a_jobid
+				# lea loads the address of the Job ID string !
+				funcstart = addr-i
+				break
 			end
 		end
-	}
-end
+	end
+}
 
 puts 'found initIDs function: %x' % funcstart if $VERBOSE
 
