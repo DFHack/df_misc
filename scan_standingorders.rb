@@ -1,5 +1,8 @@
 require 'metasm'
 
+$: << File.dirname(__FILE__)
+require 'osx_scanxrefs'
+
 # metasm script to find standing orders offsets
 # tested in 34.11 win/linux, fails on osx
 
@@ -83,18 +86,23 @@ list.each { |header, strings|
         next
     end
 
-    code = dasm.pattern_scan([hdr_addr].pack('L'))[0]
+    codes = scan_code_xrefs(dasm, hdr_addr, 0x40000)
+    code = codes[0]
     if not code
         puts "cant find xref to #{header.inspect}"
         next
     end
     puts "code at %x" % code if $VERBOSE
-    dasm.disassemble_fast(code+4)
+    if defined? @osx_xref_getip
+	    puts "getip at %x" % @osx_xref_getip[0] if $VERBOSE
+	    dasm.disassemble_fast_deep(@osx_xref_getip[0])
+    else
+	    dasm.disassemble_fast(code+4)
+    end
 
     xml = []
     strings.each { |str, global|
         nextaddr = dasm.pattern_scan(str, hdr_addr, 0x10000)[0]
-        #nextaddr = dasm.pattern_scan(header)[0]
         if not nextaddr
             puts "cant find string #{header.inspect} #{str.inspect} after %x" % str_addr
             next
@@ -113,7 +121,7 @@ list.each { |header, strings|
         xr_block = dasm.block_including(xr)
         # move up to the 'jz' block
         while xr_block.to_normal.to_a.length != 2
-            from = (xr_block.from_normal || xr_block.from_subfuncret)[0]
+            from = (xr_block.from_subfuncret || xr_block.from_normal)[0]
             xr_block = dasm.block_at(from)
         end
         # find the condition
