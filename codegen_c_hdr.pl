@@ -202,9 +202,14 @@ sub render_global_class {
     local $prefix = $name;
     local @lines;
 
-    if ($has_rtti and !$parent) {
+    if ($has_rtti) {
         my $vms = $type->findnodes('child::virtual-methods')->[0];
-        render_class_vtable($name, $vms);
+        if (!$parent) {
+            render_class_vtable($name, $vms);
+        } elsif ($vms) {
+            # composite vtable
+            return render_global_class_compositevtable($name, $type, $rtti_name);
+        }
     }
 
     push @lines, "struct $rtti_name {";
@@ -237,25 +242,97 @@ sub render_class_vtable {
     push @lines, "struct vtable_$name {";
     indent {
         if ($vms) {
-            my $voff = 0;
-            for my $meth ($vms->findnodes('child::vmethod')) {
-                my $name = $meth->getAttribute('name') || $meth->getAttribute('ld:anon-name') || "vmeth_$voff";
-                # TODO actual prototype ?
-                push @lines, "void *$name;";
-                $voff += 4;
-
-                if ($linux and $meth->getAttribute('is-destructor')) {
-                    # linux destructor has 2 slots
-                    push @lines, 'void *destructor2;';
-                    $voff += 4;
-                }
-            }
+            render_class_vtable_fields($vms);
         } else {
             # ida doesnt like empty structs
+            # XXX composite vtable ?
             push @lines, 'void *dummy;' if (!$stdc);
         }
     };
     push @lines, "};";
+}
+sub render_class_vtable_fields {
+    my ($vms) = @_;
+    my $voff = 0;
+    for my $meth ($vms->findnodes('child::vmethod')) {
+        my $name = $meth->getAttribute('name') || $meth->getAttribute('ld:anon-name') || "vmeth_$voff";
+        # TODO actual prototype ?
+        push @lines, "void *$name;";
+        $voff += 4;
+
+        if ($linux and $meth->getAttribute('is-destructor')) {
+            # linux destructor has 2 slots
+            push @lines, 'void *destructor2;';
+            $voff += 4;
+        }
+    }
+}
+sub render_global_class_compositevtable {
+    my ($name, $type, $rtti_name) = @_;
+
+    my $parent = $type->getAttribute('inherits-from');
+    my $ptype = $global_types{$parent};
+    $parent = $ptype->getAttribute('original-name') ||
+              $ptype->getAttribute('type-name') ||
+              $parent;
+
+    my $vms = $type->findnodes('child::virtual-methods')->[0];
+    my $parent_vtable = $ptype;
+
+    my $vptype = $ptype;
+    while ($vptype && !$vptype->findnodes('child::virtual-methods')->[0])
+    {
+        my $vp = $vptype->getAttribute('inherits-from');
+        $vptype = $global_types{$vp};
+    }
+
+    if (!$vptype)
+    {
+        print "no parent for composite $name\n";
+        return
+    }
+    my $vpname = $vptype->getAttribute('type-name');
+
+    push @lines, "struct vtable_$name {";
+    indent {
+        push @lines, "struct vtable_$vpname super;";
+        render_class_vtable_fields($vms);
+    };
+    push @lines, "};";
+
+    my @ancestors;
+    push @ancestors, $type;
+    while ($ptype)
+    {
+        push @ancestors, $ptype;
+        my $p = $ptype->getAttribute('inherits-from');
+        $ptype = '';
+        $ptype = $global_types{$p} if ($p);
+    }
+
+    push @lines, "struct $rtti_name {";
+    indent {
+        push @lines, "struct vtable_$name *vtable;";
+
+        while ($type = pop(@ancestors))
+        {
+            if (@ancestors)
+            {
+                my $aname = $type->getAttribute('type-name');
+                # needed to align last field of parent structure
+                push @lines, "struct {";
+                indent {
+                    render_struct_fields($type);
+                };
+                push @lines, "} $aname;";
+            } else {
+                render_struct_fields($type);
+            }
+        }
+    };
+    push @lines, "};\n";
+
+    push @lines_full, @lines;
 }
 
 sub render_global_objects {
