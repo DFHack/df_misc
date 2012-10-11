@@ -449,10 +449,13 @@ sub render_item_container {
     $subtype = join('_', split('-', $subtype));
     my $tg = $item->findnodes('child::ld:item')->[0];
     if ($tg) {
+        while ($tg->getAttribute('is-union')) {
+            $tg = $tg->findnodes('child::ld:field')->[0];
+        }
         if ($subtype eq 'stl_vector') {
             my $tgm = $tg->getAttribute('ld:meta');
             # historical_kills/killed_undead
-            $tgm = 'number' if ($tgm eq 'compound' and $tg->getAttribute('ld:subtype') eq 'bitfield');
+            $tgm = 'number' if ($tgm eq 'compound' and ($tg->getAttribute('ld:subtype')||'') eq 'bitfield');
             if ($tgm eq 'pointer') {
                 my $ttg = $tg->findnodes('child::ld:item')->[0];
                 if ($ttg and $ttg->getAttribute('ld:meta') eq 'primitive' and $ttg->getAttribute('ld:subtype') eq 'stl-string') {
@@ -473,6 +476,15 @@ sub render_item_container {
                     push @lines, "struct stl_vector_$tgtst";
                 } else {
                     push @lines, "// TODO in $prefix: struct stl_vector_global-$tgtm";
+                }
+            } elsif ($tgm eq 'compound') {
+                my $tgst = $tg->getAttribute('ld:subtype');
+                $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
+                if ($tgst and $tgst =~ /int/) {
+                    push @lines, "struct stl_vector_$tgst";
+                } else {
+                    $tgst ||= '?';
+                    push @lines, "// TODO in $prefix: struct stl_vector-compound-$tgst";
                 }
             } else {
                 push @lines, "// TODO in $prefix: struct stl_vector-$tgm";
