@@ -1,6 +1,7 @@
 require 'metasm'
 
 dumpfuncs = ARGV.delete '--dumpfuncs'
+dumpmap = ARGV.delete '--map'
 
 binpath = ARGV.shift || 'Dwarf Fortress.exe'
 ENV['METASM_NODECODE_RELOCS'] = '1'
@@ -144,6 +145,8 @@ vtable.sort.each { |str, vaddrs|
 			i += 1
 		end
 		puts "</vtable-address>"
+	elsif dumpmap
+		puts "%08x d vtable_%s" % [vaddrs[0], str]
 	else
 		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'/>"
 	end
