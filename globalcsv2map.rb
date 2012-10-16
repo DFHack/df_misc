@@ -7,4 +7,8 @@ ARGF.each_line { |l|
 	addr = el[2][1...-1]
 	name = el[5][1...-1]
 	puts "%08x d %s" % [addr.to_i(16), name.gsub(/[^\w]/, '_')]
+
+	if el[4] == '"stl-vector"'
+		puts "%08x d %s" % [addr.to_i(16)+4, name.gsub(/[^\w]/, '_')+'_endvec']
+	end
 }
