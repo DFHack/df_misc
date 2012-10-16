@@ -456,39 +456,7 @@ sub render_item_container {
             my $tgm = $tg->getAttribute('ld:meta');
             # historical_kills/killed_undead
             $tgm = 'number' if ($tgm eq 'compound' and ($tg->getAttribute('ld:subtype')||'') eq 'bitfield');
-            if ($tgm eq 'pointer') {
-                my $ttg = $tg->findnodes('child::ld:item')->[0];
-                if ($ttg and $ttg->getAttribute('ld:meta') eq 'primitive' and $ttg->getAttribute('ld:subtype') eq 'stl-string') {
-                    push @lines, 'struct stl_vector_strptr';
-                } else {
-                    push @lines, 'struct stl_vector_ptr';
-                }
-            } elsif ($tgm eq 'number') {
-                my $tgst = $tg->getAttribute('ld:subtype');
-                $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
-                $tgst = 'int8_t' if $tgst eq 'bool';    # dont confuse with stl-bit-vector
-                push @lines, "struct stl_vector_$tgst";
-            } elsif ($tgm eq 'global') {
-                my $tgt = $global_types{$tg->getAttribute('type-name')};
-                my $tgtm = $tgt->getAttribute('ld:meta');
-                if ($tgtm eq 'enum-type' or $tgtm eq 'bitfield-type') {
-                    my $tgtst = $tgt->getAttribute('base-type') || 'int32_t';
-                    push @lines, "struct stl_vector_$tgtst";
-                } else {
-                    push @lines, "// TODO in $prefix: struct stl_vector_global-$tgtm";
-                }
-            } elsif ($tgm eq 'compound') {
-                my $tgst = $tg->getAttribute('ld:subtype');
-                $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
-                if ($tgst and $tgst =~ /int/) {
-                    push @lines, "struct stl_vector_$tgst";
-                } else {
-                    $tgst ||= '?';
-                    push @lines, "// TODO in $prefix: struct stl_vector-compound-$tgst";
-                }
-            } else {
-                push @lines, "// TODO in $prefix: struct stl_vector-$tgm";
-            }
+            render_stlvector($item, $tgm);
         } elsif ($subtype eq 'df_linked_list') {
             push @lines, 'struct df_linked_list';
         } elsif ($subtype eq 'df_array') {
@@ -500,7 +468,7 @@ sub render_item_container {
         }
     } else {
         if ($subtype eq 'stl_vector') {
-            push @lines, 'struct stl_vector_ptr';
+            render_stlvector($item, 'pointer');
         } elsif ($subtype eq 'stl_bit_vector') {
             push @lines, 'struct stl_vector_bool';
         } elsif ($subtype eq 'df_flagarray') {
@@ -510,6 +478,61 @@ sub render_item_container {
         }
     }
     $lines[$#lines] .= " $name" if ($name);
+}
+
+sub render_stlvector {
+    my ($item, $tgm) = @_;
+    my $tg = $item->findnodes('child::ld:item')->[0];
+
+    if ($tgm eq 'pointer') {
+        my $ttg;
+        $ttg = $tg->findnodes('child::ld:item')->[0] if $tg;
+        if ($ttg and $ttg->getAttribute('ld:meta') eq 'primitive' and $ttg->getAttribute('ld:subtype') eq 'stl-string') {
+            push @lines, 'struct stl_vector_strptr';
+        } elsif (!$stdc || !$tg) {
+            push @lines, 'struct stl_vector_ptr';
+        } else {
+            render_stlvector_ptr($item, $tg);
+        }
+    } elsif ($tgm eq 'number') {
+        my $tgst = $tg->getAttribute('ld:subtype');
+        $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
+        $tgst = 'int8_t' if $tgst eq 'bool';    # dont confuse with stl-bit-vector
+        push @lines, "struct stl_vector_$tgst";
+    } elsif ($tgm eq 'global') {
+        my $tgt = $global_types{$tg->getAttribute('type-name')};
+        my $tgtm = $tgt->getAttribute('ld:meta');
+        if ($tgtm eq 'enum-type' or $tgtm eq 'bitfield-type') {
+            my $tgtst = $tgt->getAttribute('base-type') || 'int32_t';
+            push @lines, "struct stl_vector_$tgtst";
+        } else {
+            push @lines, "// TODO in $prefix: struct stl_vector_global-$tgtm";
+        }
+    } elsif ($tgm eq 'compound') {
+        my $tgst = $tg->getAttribute('ld:subtype');
+        $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
+        if ($tgst and $tgst =~ /int/) {
+            push @lines, "struct stl_vector_$tgst";
+        } else {
+            $tgst ||= '?';
+            push @lines, "// TODO in $prefix: struct stl_vector-compound-$tgst";
+        }
+    } else {
+        push @lines, "// TODO in $prefix: struct stl_vector-$tgm";
+    }
+}
+
+sub render_stlvector_ptr {
+    my ($item, $tg) = @_;
+
+    push @lines, "struct {";
+    indent {
+        render_item($tg, "*ptr;");
+        push @lines, "void *endptr;";
+        push @lines, "void *endalloc;";
+        push @lines, "int32_t pad;" if (!$linux);
+    };
+    push @lines, "}";
 }
 
 sub render_item_pointer {
@@ -552,7 +575,11 @@ sub render_item_bytes {
         push @lines, "char ${name}[$size]";
     } elsif ($subtype eq 'static-string') {
         my $size = $item->getAttribute('size');
-        push @lines, "char ${name}[$size]";
+        if ($size) {
+            push @lines, "char ${name}[$size]";
+        } else {
+            push @lines, "char *${name}";
+        }
     } else {
         print "no render bytes $subtype\n";
     }
