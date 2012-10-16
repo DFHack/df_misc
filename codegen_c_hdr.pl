@@ -527,7 +527,8 @@ sub render_stlvector_ptr {
 
     push @lines, "struct {";
     indent {
-        render_item($tg, "*ptr;");
+        render_item($tg, "*ptr");
+        $lines[$#lines] .= ';';
         push @lines, "void *endptr;";
         push @lines, "void *endalloc;";
         push @lines, "int32_t pad;" if (!$linux);
