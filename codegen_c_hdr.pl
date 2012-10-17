@@ -375,8 +375,8 @@ sub render_item_global {
     my $subtype = $item->getAttribute('ld:subtype');
     my $type = $global_types{$typename};
     my $tname = $type->getAttribute('original-name') ||
-    $type->getAttribute('type-name') ||
-    $typename;
+            $type->getAttribute('type-name') ||
+            $typename;
 
     if ($subtype and $subtype eq 'enum') {
         #push @lines, "enum $typename $name;";  # this does not handle int16_t enums
@@ -401,12 +401,15 @@ sub render_item_number {
     my ($item, $name) = @_;
 
     my $subtype = $item->getAttribute('ld:subtype');
+    my $enum;
+    $enum = $item->getAttribute('type-name') if ($subtype and $subtype eq 'enum');
     $subtype = $item->getAttribute('base-type') if (!$subtype or $subtype eq 'enum' or $subtype eq 'bitfield');
     $subtype = 'int32_t' if (!$subtype);
     $subtype = 'int8_t' if ($subtype eq 'bool');
     $subtype = 'float' if ($subtype eq 's-float');
 
     push @lines, "$subtype";
+    $lines[$#lines] .= " __attribute__((enum($enum)))" if ($stdc and $enum);
     $lines[$#lines] .= " $name" if ($name);
 }
 
