@@ -2,13 +2,17 @@
 
 # convert a global.csv file into a .map (linux system.map style)
 
+seen = {}
 ARGF.each_line { |l|
 	el = l.split(',')
-	addr = el[2][1...-1]
+	addr = el[2][1...-1].to_i(16)
 	name = el[5][1...-1]
-	puts "%08x d %s" % [addr.to_i(16), name.gsub(/[^\w]/, '_')]
+	if !seen[addr]
+		seen[addr] = true
+		puts "%08x d %s" % [addr, name.gsub(/[^\w]/, '_')]
+	end
 
 	if el[4] == '"stl-vector"'
-		puts "%08x d %s" % [addr.to_i(16)+4, name.gsub(/[^\w]/, '_')+'_endvec']
+		puts "%08x d %s" % [addr+4, name.gsub(/[^\w]/, '_')+'_endvec']
 	end
 }
