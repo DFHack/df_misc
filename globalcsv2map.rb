@@ -6,6 +6,7 @@ seen = {}
 ARGF.each_line { |l|
 	el = l.split(',')
 	addr = el[2][1...-1].to_i(16)
+	next if addr == 0
 	name = el[5][1...-1]
 	if !seen[addr]
 		seen[addr] = true
