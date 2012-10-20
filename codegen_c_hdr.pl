@@ -551,7 +551,7 @@ sub render_item_staticarray {
 
     my $count = $item->getAttribute('count');
     my $tg = $item->findnodes('child::ld:item')->[0];
-    if ($name and $name =~ /\*$/) {
+    if ($name and $name =~ /^\*/) {
         render_item($tg, "*${name}");
     } else {
         render_item($tg, "${name}[$count]");
