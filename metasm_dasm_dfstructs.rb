@@ -1,20 +1,42 @@
 # metasm disassembler plugin for Dwarf Fortress
 
-# you may want to generate a .map file with vtable & global info first
-#  see scan_vtable.rb --map & globalscsv2map.rb
-# you'll also need a .h (see generate_c_hdr.rb --stdc [--linux])
-# 
-# disassemble some code (fast&deep), run the 'imm2off' plugin, then this one
-# this plugin uses globals.csv in the current directory
+# quickstart:
+#  install ruby, and ruby-gtk if on linux
+#  create a directory with metasm/, Dwarf_Fortress, globals.csv
+#  edit the 'ep' line below, and run
+#
+# ruby scan_vtable.rb --map Dwarf_Fortress > df.map
+# ruby globalcsv2map.rb globals.csv >> df.map
+# perl codegen_c_hdr.pl dfhack/library/include/df/codegen.out.xml --stdc --linux codegen.h
+# ruby -I metasm metasm/samples/disassemble-gui.rb Dwarf_Fortress -P metasm_dasm_dfstructs
 
-if false
+# to navigate, use 'g' to go to a specific address
+# use ctrl-maj-C to disassemble
+# use 't' to define a register as a pointer to a struct
+#  eg click on 'eax' somewhere, type 't', and type 'unitst' in the popup
+# use 'K' to name stack variables
+# use 'k' to toggle string representation / raw numeric value
+# 'space' toggles graph view
+
+# drawbacks: no save
+# dont disassemble too many things
+# dont type 'tab' (will take hours trying to decompile and fail)
+
+
+# linux 34.11 ctor_viewscreen_layer_militaryst
+ep = 0x08cd9290
+
 load_map 'globals.map'
 parse_c_file 'codegen.h'
+
+disassemble_fast_deep(ep)
+gui.focus_addr(ep, :graph)
 
 load_plugin 'imm2off'		# add xrefs to known labels (from map file)
 load_plugin 'stringsxrefs'	# add comments on instrs with pointers to ascii
 load_plugin 'demangle_cpp'	# add demangled C++ names in comments
-end
+load_plugin 'hl_opcode'
+
 
 # load globals.csv, map label names -> struct name
 globals = File.readlines('globals.csv').inject({}) { |h, l|
