@@ -5,8 +5,8 @@
 #  create a directory with metasm/, Dwarf_Fortress, globals.csv
 #  edit the 'ep' line below, and run
 #
-# ruby scan_vtable.rb --map Dwarf_Fortress > df.map
-# ruby globalcsv2map.rb globals.csv >> df.map
+# ruby scan_vtable.rb --map Dwarf_Fortress > globals.map
+# ruby globalcsv2map.rb globals.csv >> globals.map
 # perl codegen_c_hdr.pl dfhack/library/include/df/codegen.out.xml --stdc --linux codegen.h
 # ruby -I metasm metasm/samples/disassemble-gui.rb Dwarf_Fortress -P metasm_dasm_dfstructs
 
