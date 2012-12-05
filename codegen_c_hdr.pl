@@ -222,7 +222,12 @@ sub render_global_class {
         }
         render_struct_fields($type);
     };
-    push @lines, "};\n";
+
+    # GCC: class a { vtable; char; } ; class b:a { char c2; } -> c2 has offset 5 (Windows MSVC: offset 8)
+    my $magic_attr = '';
+    $magic_attr = ' __attribute__((sizeof_packed))' if ($stdc && $linux && $has_rtti);
+
+    push @lines, "}$magic_attr;\n";
 
     push @lines_full, @lines;
 }
