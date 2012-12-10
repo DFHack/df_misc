@@ -120,7 +120,7 @@ sub render_global_bitfield {
     return if $seen_class{$name};
     $seen_class{$name}++;
 
-    $prefix = $name;
+    local $prefix = $name;
     local @lines;
     push @lines, "struct $name {";
     indent {
@@ -344,7 +344,7 @@ sub render_global_class_compositevtable {
 sub render_global_objects {
     my (@objects) = @_;
 
-    $prefix = 'global';
+    local $prefix = 'global';
     local @lines;
     for my $obj (@objects) {
         my $oname = $obj->getAttribute('name');
