@@ -143,7 +143,7 @@ sub render_bitfield_fields {
     for my $field ($type->findnodes('child::ld:field')) {
         my $count = $field->getAttribute('count') || 1;
         my $name = $field->getAttribute('name');
-        $name = $field->getAttribute('ld:anon-name') || '' if (!$name);
+        $name = $field->getAttribute('ld:anon-name') || "unk_$shift" if (!$name);
         $name = '_' . $name if !$stdc and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_|^effects$/;
         push @lines, "$basetype $name:$count;";
         $shift += $count;

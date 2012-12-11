@@ -2,13 +2,8 @@
 
 # quickstart:
 #  install ruby, and ruby-gtk if on linux
-#  create a directory with metasm/, Dwarf_Fortress, globals.csv
-#
-# ruby scan_vtable.rb --map Dwarf_Fortress > Dwarf_Fortress.map
-# ruby globalcsv2map.rb globals.csv >> Dwarf_Fortress.map
-# perl codegen_c_hdr.pl dfhack/library/include/df/codegen.out.xml --stdc --linux Dwarf_Fortress.h
-# mv metasm_dasm_dfstructs.rb Dwarf_Fortress.rb
-# ruby -I metasm metasm/samples/disassemble-gui.rb Dwarf_Fortress -a
+#  run metasm_prepare.rb
+#  and ruby -I metasm metasm/samples/disassemble-gui.rb path/to/Dwarf_Fortress -a
 
 # to navigate, use 'g' to go to a specific address
 # use ctrl-maj-C to disassemble
@@ -82,8 +77,11 @@ last_cnt = 0
 self.callback_finished  = proc {
 	if last_cnt != @decoded.length
 		last_cnt = @decoded.length
+		puts 'running df plugins'
 		load_plugin 'imm2off'
+		puts 'imm2off'
 		load_plugin 'stringsxrefs'
+		puts 'stringsxrefs'
 		load_plugin 'demangle_cpp'
 		df_structs
 	end

@@ -5,8 +5,8 @@
 seen = {}
 ARGF.each_line { |l|
 	el = l.split(',')
+	next if el[2][1, 2] != '0x'
 	addr = el[2][1...-1].to_i(16)
-	next if addr == 0
 	next if el[3].include?('.')	# skip bitfields
 	name = el[5][1...-1]
 	if !seen[addr]
