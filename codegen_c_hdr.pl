@@ -404,11 +404,10 @@ sub render_item_global {
 }
 
 sub render_item_number {
-    my ($item, $name) = @_;
+    my ($item, $name, $enum) = @_;
 
     my $subtype = $item->getAttribute('ld:subtype');
-    my $enum;
-    $enum = $item->getAttribute('type-name') if ($subtype and $subtype eq 'enum');
+    $enum ||= $item->getAttribute('type-name') if ($subtype and $subtype eq 'enum');
     $subtype = $item->getAttribute('base-type') if (!$subtype or $subtype eq 'enum' or $subtype eq 'bitfield');
     $subtype = 'int32_t' if (!$subtype);
     $subtype = 'int8_t' if ($subtype eq 'bool');
@@ -423,10 +422,10 @@ sub render_item_compound {
     my ($item, $name) = @_;
 
     my $subtype = $item->getAttribute('ld:subtype');
+    my $sname = $item->getAttribute('ld:typedef-name') || $name || 'anon';
+    $sname = $prefix . '_' . $sname if $stdc;
+
     if (!$subtype || $subtype eq 'bitfield') {
-        my $tdef = $item->getAttribute('ld:typedef-name') || 'anon';
-        my $sname = $tdef;
-        $sname = $prefix . '_' . $sname if $stdc;
         if ($item->getAttribute('is-union')) {
             push @lines, "union {";
         } else {
@@ -444,7 +443,13 @@ sub render_item_compound {
         $lines[$#lines] .= " $name" if ($name);
 
     } elsif ($subtype eq 'enum') {
-        render_item_number($item, $name);
+        if (!$item->getAttribute('typename')) {
+            # inline enum
+            render_global_enum($sname, $item); 
+            render_item_number($item, $name, $sname);
+        } else {
+            render_item_number($item, $name);
+        }
 
     } else {
         print "no render compound $subtype\n";
