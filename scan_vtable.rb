@@ -58,8 +58,10 @@ if dasm.program.shortname == 'coff'
 	# mangled_classname_ptr   dd ?
 	# mangled_classname_ptr+4 dd 0
 	# mangled_classname_ptr+8 db ".?AVbuilding_bedst@@"
+	
+	# .?AVclassst@@ / .?AUstructst@@
 
-	dasm.pattern_scan(/\.\?AV\w+st@@/) { |addr|
+	dasm.pattern_scan(/\.\?A[UV]\w+st@@/) { |addr|
 		strings[addr-8] = dasm.decode_strz(addr)
 	}
 
