@@ -11,17 +11,18 @@ Metasm::DynLdr.new_func_c <<EOC
 #line #{__LINE__}
 // return the index in str where it contains one of ptrs
 // starts from the end, iterate by restarting at last offset found
-int scanptrs(char *str, int strlen, unsigned *ptrs, int ptrslen) {
+int scanptrs(char *str, int strlen, unsigned __int32 *ptrs, int ptrslen) {
 	int i;
-	unsigned p;
-	for (i=strlen-4 ; i ; --i) {
-		p = *(unsigned*)(str+i);
-		if (p < ptrs[0] || p > ptrs[ptrslen-1])
-			continue;
-		for (int j=0 ; j<ptrslen ; ++j)
-			if (p == ptrs[j])
-				return i;
-	}
+	unsigned __int32 p;
+	if (ptrslen > 0)
+		for (i=strlen-4 ; i ; --i) {
+			p = *(unsigned __int32 *)(str+i);
+			if ((p < ptrs[0]) || (p > ptrs[ptrslen-1]))
+				continue;
+			for (int j=0 ; j<ptrslen ; ++j)
+				if (p == ptrs[j])
+					return i;
+		}
 	return -1;
 }
 EOC
@@ -29,13 +30,11 @@ EOC
 def scanptrs(raw, hash)
 	off = raw.length
 	ptrs = hash.keys.sort.pack('L*')
-	ret = []
 	loop do
 		off = Metasm::DynLdr.scanptrs(raw, off, ptrs, hash.length)
 		break if off < 0
-		ret << [off, hash[raw[off, 4].unpack('L')[0]]]
+		yield [off, hash[raw[off, 4].unpack('L')[0]]]
 	end
-	ret
 end
 
 
@@ -99,10 +98,10 @@ end
 
 
 # find all pointers to what looks like mangled structure name ("06unitst")
-file_raw = File.read(binpath)
+file_raw = File.open(binpath, 'rb') { |fd| fd.read }
 
 sptr = {}
-scanptrs(file_raw, strings).each { |off, str|
+scanptrs(file_raw, strings) { |off, str|
 	vaddr = dasm.fileoff_to_addr(off) - classname_offset
 	sptr[vaddr] = str
 }
@@ -112,7 +111,7 @@ text = (dasm.section_info.assoc('.text') || dasm.section_info.assoc('__text')).v
 
 # vtable 
 vtable = {}
-scanptrs(file_raw, sptr).each { |off, str|
+scanptrs(file_raw, sptr) { |off, str|
 	vaddr = dasm.fileoff_to_addr(off) + 4
 
 	# check that we have an actual function pointer here (eg into .text)
