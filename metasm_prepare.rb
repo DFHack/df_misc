@@ -37,6 +37,20 @@ ensure
 end
 
 
+def dump_vfuncs(dasm, addr, cls, vt, soff=0)
+	vt.members.each { |m|
+		off = vt.offsetof(dasm.c_parser, m)
+		if not m.type.pointer?
+			dump_vfuncs(dasm, addr, cls, m.type, soff+off)
+		else
+			faddr = dasm.decode_dword(addr+soff+off)
+			# TODO full prototype, including return type
+			mangled = "_ZN#{cls.length}#{cls}#{m.name.length}#{m.name}E"
+			puts '%08x d %s' % [faddr, mangled]
+		end
+	}
+end
+
 def vtable_funcs_map(df, map, hdr)
 	vtables = File.readlines(map).map { |l| w = l.split; [w[0].to_i(16), w[2]] }
 
@@ -51,14 +65,7 @@ def vtable_funcs_map(df, map, hdr)
 		vt = struct.members.first.type
 		vt = vt.members.first.type until vt.pointer?
 		vt = vt.type
-
-		vt.members.each { |m|
-			off = vt.offsetof(dasm.c_parser, m)
-			faddr = dasm.decode_dword(addr+off)
-			# TODO full prototype, including return type
-			mangled = "_ZN#{cls.length}#{cls}#{m.name.length}#{m.name}E"
-			puts '%08x d %s' % [faddr, mangled]
-		}
+		dump_vfuncs(dasm, addr, cls, vt)
 	}
 end
 
