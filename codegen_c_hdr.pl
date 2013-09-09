@@ -78,7 +78,7 @@ sub render_global_enum {
 
     local @lines;
     push @lines, "enum $name {";
-    $prefix = $name;
+    local $prefix = $name;
     indent {
         render_enum_fields($type);
     };
