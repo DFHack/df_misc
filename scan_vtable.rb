@@ -3,7 +3,9 @@ require 'metasm'
 dumpfuncs = ARGV.delete '--dumpfuncs'
 dumpmap = ARGV.delete '--map'
 
-binpath = ARGV.shift || 'Dwarf Fortress.exe'
+binpath = ARGV.shift
+abort "usage: scan_vtable.rb /path/to/df_exe [--map] [--dumpfuncs]" if not binpath
+
 ENV['METASM_NODECODE_RELOCS'] = '1'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
 
@@ -123,6 +125,19 @@ scanptrs(file_raw, sptr) { |off, str|
 	vtable[s] << vaddr
 }
 
+# return the array of virtual functions in a table (sequence of pointers inside .text)
+vt_funcs = lambda { |vt_addr|
+	out = []
+	a = vt_addr
+	loop do
+		vf = dasm.normalize(dasm.decode_dword(a))
+		break if not vf.kind_of?(Integer) or vf < text[0] or vf > text[0]+text[1]
+		out << vf
+		a += 4
+	end
+	out
+}
+
 vtable.sort.each { |str, vaddrs|
 	if vaddrs.length > 1 and gcc_hint
 		# conflict
@@ -134,20 +149,19 @@ vtable.sort.each { |str, vaddrs|
 
 	if vaddrs.length != 1
 		puts "<!-- CONFLICT vtable-address name='#{str}' value='#{vaddrs.map { |va| '0x%x' % va }.join(' or ')}'/ -->"
-	elsif dumpfuncs
-		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'>"
-		a = vaddrs[0]
-		i = 0
-		loop do
-			vf = dasm.normalize(dasm.decode_dword(a))
-			break if not vf.kind_of?(Integer) or vf < text[0] or vf > text[0]+text[1]
-			puts "    <vtable-function index='%d' addr='0x%x'/>" % [i, vf]
-			a += 4
-			i += 1
-		end
-		puts "</vtable-address>"
 	elsif dumpmap
 		puts "%08x d vtable_%s" % [vaddrs[0], str]
+		if dumpfuncs
+			vt_funcs[vaddrs[0]].each_with_index { |vf, idx|
+				puts "%08x d vfunc_%s_%x" % [vf, str, 4*idx]
+			}
+		end
+	elsif dumpfuncs
+		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'>"
+		vt_funcs[vaddrs[0]].each_with_index { |vf, idx|
+			puts "    <vtable-function index='%d' addr='0x%x'/>" % [idx, vf]
+		}
+		puts "</vtable-address>"
 	else
 		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'/>"
 	end
