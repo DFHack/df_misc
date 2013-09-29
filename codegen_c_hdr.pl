@@ -206,10 +206,10 @@ sub render_global_class {
     if ($has_rtti) {
         my $vms = $type->findnodes('child::virtual-methods')->[0];
         if (!$parent) {
-            render_class_vtable($name, $vms);
+            render_class_vtable($rtti_name, $vms);
         } elsif ($vms) {
             # composite vtable
-            return render_global_class_compositevtable($name, $type, $rtti_name);
+            return render_global_class_compositevtable($rtti_name, $type);
         }
     }
 
@@ -218,7 +218,7 @@ sub render_global_class {
         if ($parent) {
             push @lines, "struct $parent super;";
         } elsif ($has_rtti) {
-            push @lines, "struct vtable_$name *vtable;";
+            push @lines, "struct vtable_$rtti_name *vtable;";
         }
         render_struct_fields($type);
     };
@@ -274,7 +274,7 @@ sub render_class_vtable_fields {
     }
 }
 sub render_global_class_compositevtable {
-    my ($name, $type, $rtti_name) = @_;
+    my ($name, $type) = @_;
 
     my $parent = $type->getAttribute('inherits-from');
     my $ptype = $global_types{$parent};
@@ -297,7 +297,8 @@ sub render_global_class_compositevtable {
         print "no parent for composite $name\n";
         return
     }
-    my $vpname = $vptype->getAttribute('type-name');
+    my $vpname = $vptype->getAttribute('original-name') ||
+                 $vptype->getAttribute('type-name');
 
     push @lines, "struct vtable_$name {";
     indent {
@@ -316,7 +317,7 @@ sub render_global_class_compositevtable {
         $ptype = $global_types{$p} if ($p);
     }
 
-    push @lines, "struct $rtti_name {";
+    push @lines, "struct $name {";
     indent {
         push @lines, "struct vtable_$name *vtable;";
 
