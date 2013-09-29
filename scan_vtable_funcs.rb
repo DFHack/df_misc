@@ -2,15 +2,18 @@
 
 # generate xml skeleton for a class vtable
 
-# usage: (run in the df_misc/ directory)
+# usage: (run from the df_misc/ directory)
 #  export RUBYLIB=/path/to/metasm
 #  scan_vtable_funcs.rb [--args] [--asm] /path/to/df.exe /path/to/dfhack [class_namest]
 #
-# dfhack must be already compiled (uptodate codegen.out.xml)
+# last argument is a regexp matched against rtti class names
 #
-# can auto-detect function args & return type (for best results run on the windows df binary)
-# can dump vfuncs asm code (for best results run on the linux df binary & after running ./metasm_prepare.rb)
-# XXX when run on the linux binary, output will include 2 entries for the class dtor
+# dfhack must be already compiled (ie uptodate codegen.out.xml)
+#
+# with --args, can auto-detect function args & return type (for best results run against the windows df binary)
+# with --asm, can dump vfuncs asm code (for best results run against the linux df binary & after running ./metasm_prepare.rb)
+#
+# XXX when run against the linux binary, output will include 2 entries for the class dtor
 
 # sample output:
 #    <class-type type-name='general_ref' original-name='general_refst'>
@@ -26,6 +29,7 @@
 #        </virtual-methods>
 #    </class-type>
 
+ARGV.clear if ARGV.delete('-h')
 $dump_asm = ARGV.delete('--asm')
 $dump_args = ARGV.delete('--args')
 df = ARGV.shift
@@ -48,6 +52,7 @@ ensure
 end
 
 
+# return the name of the structure member of type 'pointer' at offset <off>
 def ptr_name_off(dasm, vt, off)
 	return if not vt
 	vt.members.each { |m|
@@ -62,6 +67,18 @@ def ptr_name_off(dasm, vt, off)
 	}
 	nil
 end
+
+# one vmethod analysis
+# with --args:
+#  autodetect argument count from 'ret 8' (on windows binary)
+#  autodetect return type (if code block with 'ret' contains 'mov al, <whatever>' -> return type = int8_t
+# with --asm:
+#  dump function asm
+# TODO
+#  autodetect destructor through rewriting vtable pointer
+#  improved asm output (types, etc)
+#  improved argument detection (pointers, flags, ...)
+#   autodetect read_file write_file through func signature + usage of file_compressor ?
 
 def analyse_vfunc(dasm, cls, addr)
 	return if not $dump_asm and not $dump_args
@@ -109,7 +126,10 @@ def analyse_vfunc(dasm, cls, addr)
 	end
 end
 
-def dump_vfuncs(dasm, addr, cls, funcs, vt)
+
+# dump vfuncs for a given vtable
+# TODO handle class inheritance
+def dump_vfuncs(dasm, cls, funcs, vt)
 	puts "    <class-type type-name='#{cls.chomp('st')}' original-name='#{cls}'>"
 	puts "        <virtual-methods>"
 	funcs.each_with_index { |faddr, idx|
@@ -132,7 +152,7 @@ def vtable_funcs_map(df, map, hdr, cls_re)
 		addr, name = [w[0].to_i(16), w[2]]
 		case name
 		when /^vtable_(.*)$/
-			vtables << [addr, $1]
+			vtables << $1
 		when /^vfunc_(.*)_[a-f0-9]+$/
 			(vfuncs[$1] ||= []) << addr
 		end
@@ -150,14 +170,14 @@ def vtable_funcs_map(df, map, hdr, cls_re)
 		dasm.load_map(dfmap) if File.exists?(dfmap)
 	end
 
-	vtables.each { |addr, name|
+	vtables.each { |name|
 		next if cls_re and name !~ /#{cls_re}/i
 		if struct = dasm.c_parser.toplevel.struct[name]
 			vt = struct.members.first.type
 			vt = vt.members.first.type until vt.pointer?
 			vt = vt.type
 		end
-		dump_vfuncs(dasm, addr, name, vfuncs[name], vt)
+		dump_vfuncs(dasm, name, vfuncs[name], vt)
 	}
 end
 
