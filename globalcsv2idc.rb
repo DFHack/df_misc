@@ -28,6 +28,7 @@ if defined?($script_args)
 			}
 		}
 	}
+	puts "saved #{outname}"
 else
 	ARGF.each_line { |l|
 		if ol = parse_line(l)
