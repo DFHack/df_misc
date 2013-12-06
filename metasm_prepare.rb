@@ -19,7 +19,7 @@ dfbase = df.chomp('.exe') if df
 
 abort 'usage: prepare.rb df/libs/Dwarf_Fortress dfhack/' if not df or not dfhack
 
-if df =~ /\.exe$/i
+if df =~ /\.exe$/i and df !~ /dwarfort\.exe$/ # filter OSX
 	windows = true
 	globals = dfhack + '/library/xml/windows/globals.csv'
 else
