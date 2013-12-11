@@ -410,6 +410,8 @@ sub render_item_number {
     my $subtype = $item->getAttribute('ld:subtype');
     $enum ||= $item->getAttribute('type-name') if ($subtype and $subtype eq 'enum');
     $subtype = $item->getAttribute('base-type') if (!$subtype or $subtype eq 'enum' or $subtype eq 'bitfield');
+    my $g = $global_types{$enum} if ($enum);
+    $subtype ||= $g->getAttribute('base-type') if ($g);
     $subtype = 'int32_t' if (!$subtype);
     $subtype = 'int8_t' if ($subtype eq 'bool');
     $subtype = 'float' if ($subtype eq 's-float');
