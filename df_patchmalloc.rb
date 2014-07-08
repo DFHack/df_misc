@@ -134,7 +134,7 @@ puts 'scan for 0xCC holes'
 text = pe.sections.find { |sec| sec.name == '.text' }
 # patch instrs are max 6 bytes, + jmp = 10 (XXX use space at end of .text)
 # XXX check previous bytes if last 0xCC might be the last byte of a jmp?
-holes = dasm.pattern_scan(/\xCC{11,}/, text.virtaddr, text.virtsize)
+holes = dasm.pattern_scan(/\xCC{11,}/n, text.virtaddr, text.virtsize)
 
 cur_addr = holes.shift
 raise 'no hole' if not cur_addr

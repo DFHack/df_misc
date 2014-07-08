@@ -31,7 +31,7 @@ end
 def scan_xrefs_osx(dasm, target, threshold)
 	if not @osx_getip ||= nil
 		puts 'scan geteip' if $VERBOSE
-		@osx_getip = dasm.pattern_scan(/\x8b\x1c\x24\xc3/)[0]
+		@osx_getip = dasm.pattern_scan(/\x8b\x1c\x24\xc3/n)[0]
 		raise 'cannot find osx getip' if not @osx_getip
 		# actually disassemble the function for backtracking later
 		dasm.disassemble(@osx_getip)
