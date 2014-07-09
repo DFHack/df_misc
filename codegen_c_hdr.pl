@@ -415,6 +415,7 @@ sub render_item_number {
     $subtype = 'int32_t' if (!$subtype);
     $subtype = 'int8_t' if ($subtype eq 'bool');
     $subtype = 'float' if ($subtype eq 's-float');
+    $subtype = 'double' if ($subtype eq 'd-float');
 
     push @lines, "$subtype";
     $lines[$#lines] .= " __attribute__((enum($enum)))" if ($stdc and $enum);
