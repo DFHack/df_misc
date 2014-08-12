@@ -2,9 +2,10 @@ require 'metasm'
 
 dumpfuncs = ARGV.delete '--dumpfuncs'
 dumpmap = ARGV.delete '--map'
+$scanargs = ARGV.delete '--args'
 
 binpath = ARGV.shift
-abort "usage: scan_vtable.rb /path/to/df_exe [--map] [--dumpfuncs]" if not binpath
+abort "usage: scan_vtable.rb /path/to/df_exe [--map] [--dumpfuncs] [--args]" if not binpath
 
 ENV['METASM_NODECODE_RELOCS'] = '1'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
@@ -144,6 +145,31 @@ vt_funcs = lambda { |vt_addr|
 	out
 }
 
+def analyse_vfunc(dasm, addr)
+	return "" if not $scanargs
+
+	dasm.disassemble_fast(addr)
+
+	argsize = nil
+	retsize = nil
+	dasm.each_function_block(addr) { |baddr|
+		ldi = dasm.block_at(baddr).list.last
+		if ldi.opcode.name == 'ret'
+			if stk = ldi.instruction.args[0]
+				argsize = stk.reduce
+			end
+			if movdi = dasm.block_at(baddr).list.reverse.find { |di| di.to_s =~ /mov (al|ax|eax),/ }
+				retsize = movdi.instruction.args[0].sz/8
+			end
+		end
+	}
+
+	retstr = ""
+	retstr = retstr + " argsize='%d'" % argsize if argsize
+	retstr = retstr + " retsize='%d'" % retsize if retsize
+	return retstr
+end
+
 vtable.sort.each { |str, vaddrs|
 	if vaddrs.length > 1 and gcc_hint
 		# conflict
@@ -165,7 +191,8 @@ vtable.sort.each { |str, vaddrs|
 	elsif dumpfuncs
 		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'>"
 		vt_funcs[vaddrs[0]].each_with_index { |vf, idx|
-			puts "    <vtable-function index='%d' addr='0x%x'/>" % [idx, vf]
+			arginfo = analyse_vfunc(dasm, vf)
+			puts "    <vtable-function index='%d' addr='0x%x'%s/>" % [idx, vf, arginfo]
 		}
 		puts "</vtable-address>"
 	else
