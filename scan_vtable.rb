@@ -44,6 +44,7 @@ end
 strings = {}
 
 if dasm.program.shortname == 'coff'
+	$is_windows = true
 
 	# MSVC2010 vtable:
 
@@ -76,6 +77,7 @@ if dasm.program.shortname == 'coff'
 
 	classname_offset = 0xc
 else
+	$is_windows = false
 
 	# gcc vtable:
 
@@ -157,8 +159,10 @@ def analyse_vfunc(dasm, addr)
 		if ldi.opcode.name == 'ret'
 			if stk = ldi.instruction.args[0]
 				argsize = stk.reduce
+			else
+				argsize = 0 if $is_windows
 			end
-			if movdi = dasm.block_at(baddr).list.reverse.find { |di| di.to_s =~ /mov (al|ax|eax),/ }
+			if movdi = dasm.block_at(baddr).list.reverse.find { |di| di.to_s =~ /((mov|xor|or) (al|ax|eax),|set\w+ al)/ }
 				retsize = movdi.instruction.args[0].sz/8
 			end
 		end
