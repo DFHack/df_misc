@@ -65,6 +65,9 @@ if dasm.program.shortname == 'coff'
 	dasm.pattern_scan(/\.\?A[UV]\w+st@@/) { |addr|
 		strings[addr-8] = dasm.decode_strz(addr)
 	}
+	dasm.pattern_scan(/\.\?A[UV]renderer(_\w+)?@@/) { |addr|
+		strings[addr-8] = dasm.decode_strz(addr)
+	}
 
 	def demangle_str(s)
 		s[4, s.length-6]
@@ -85,6 +88,9 @@ else
 
 
 	dasm.pattern_scan(/\d+\w+st\0/) { |addr|
+		strings[addr] = dasm.decode_strz(addr)
+	}
+	dasm.pattern_scan(/\d+renderer(_\w+)?\0/) { |addr|
 		strings[addr] = dasm.decode_strz(addr)
 	}
 
