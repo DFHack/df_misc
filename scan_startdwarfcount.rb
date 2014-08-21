@@ -3,9 +3,7 @@ require 'metasm'
 # this scripts scans a binary for the number 7 used as starting dwarf count in fortress mode
 # works for the windows/linux and macos versions
 
-# needs the size of the struct unit for the current version, can be found in
-#  build/plugins/ruby-autogen.rb right after 'class Unit' once dfhack is compiled
-# (only for the current build target, linux is the same as mac, but differs from windows)
+# the sizeof_structunit can be found using the get_sizeofunit.pl script
 
 abort 'usage: scan <exe> <sizeof_unitstruct>' if ARGV.length != 2
 
