@@ -59,63 +59,108 @@ osx_bin = File.join(osx_tmp, 'dwarfort.exe')
 
 
 # TODO patch globals.xml directly
+if not File.file?("lin_#{version}_vtable.xml")
 puts "lin_vtable"
 lin_vtable = `ruby #{misc_path}/scan_vtable.rb #{lin_bin.shellescape}`
 File.open("lin_#{version}_vtable.xml", 'w') { |fd| fd.puts lin_vtable }
+end
 
+if not File.file?("win_#{version}_vtable.xml")
 puts "win_vtable"
 win_vtable = `ruby #{misc_path}/scan_vtable.rb #{win_bin.shellescape}`
 File.open("win_#{version}_vtable.xml", 'w') { |fd| fd.puts win_vtable }
+end
 
+if not File.file?("osx_#{version}_vtable.xml")
 puts "osx_vtable"
 osx_vtable = `ruby #{misc_path}/scan_vtable.rb #{osx_bin.shellescape}`
 File.open("osx_#{version}_vtable.xml", 'w') { |fd| fd.puts osx_vtable }
+end
 
 
+if not File.file?("lin_#{version}_ctors.xml")
 puts "lin_ctors"
 lin_ctors = `ruby #{misc_path}/scan_ctors.rb #{lin_bin.shellescape}`
 File.open("lin_#{version}_ctors.xml", 'w') { |fd| fd.puts lin_ctors }
+end
 
+if not File.file?("osx_#{version}_ctors.xml")
 puts "osx_ctors"
 osx_ctors = `ruby #{misc_path}/scan_ctors_osx.rb #{osx_bin.shellescape}`
 File.open("osx_#{version}_ctors.xml", 'w') { |fd| fd.puts osx_ctors }
+end
 
 
+if not File.file?("lin_#{version}_nextid.xml")
 puts "lin_nextid"
 lin_nextid = `ruby #{misc_path}/scan_nextid.rb #{lin_bin.shellescape}`
 File.open("lin_#{version}_nextid.xml", 'w') { |fd| fd.puts lin_nextid }
+end
 
+if not File.file?("win_#{version}_nextid.xml")
 puts "win_nextid"
 win_nextid = `ruby #{misc_path}/scan_nextid.rb #{win_bin.shellescape}`
 File.open("win_#{version}_nextid.xml", 'w') { |fd| fd.puts win_nextid }
+end
 
+if not File.file?("osx_#{version}_nextid.xml")
 puts "osx_nextid"
 osx_nextid = `ruby #{misc_path}/scan_nextid_osx.rb #{osx_bin.shellescape}`
 File.open("osx_#{version}_nextid.xml", 'w') { |fd| fd.puts osx_nextid }
+end
 
 
+if not File.file?("lin_#{version}_standingorders.xml")
 puts "lin_standingorders"
 lin_standingorders = `ruby #{misc_path}/scan_standingorders.rb #{lin_bin.shellescape}`
 File.open("lin_#{version}_standingorders.xml", 'w') { |fd| fd.puts lin_standingorders }
+end
 
+if not File.file?("win_#{version}_standingorders.xml")
 puts "win_standingorders"
 win_standingorders = `ruby #{misc_path}/scan_standingorders.rb #{win_bin.shellescape}`
 File.open("win_#{version}_standingorders.xml", 'w') { |fd| fd.puts win_standingorders }
+end
 
 
+if not File.file?("win_#{version}_keydisplay.xml")
 puts "win_keydisplay"
 win_keydisplay = `ruby #{misc_path}/scan_keydisplay.rb #{win_bin.shellescape}`
 File.open("win_#{version}_keydisplay.xml", 'w') { |fd| fd.puts win_keydisplay }
+end
 
+if not File.file?("osx_#{version}_keydisplay.xml")
 puts "osx_keydisplay"
 osx_keydisplay = `ruby #{misc_path}/scan_keydisplay.rb #{osx_bin.shellescape}`
 File.open("osx_#{version}_keydisplay.xml", 'w') { |fd| fd.puts osx_keydisplay }
+end
 
-# startdwarfcount
+
+if not File.file?("lin_#{version}_startdwarfcount.xml")
+puts "lin_startdwarfcount"
+sizeunit_lin = `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml linux`
+lin_startdwarfcount = `ruby #{misc_path}/scan_startdwarfcount.rb #{lin_bin.shellescape} #{sizeunit_lin}`
+File.open("lin_#{version}_startdwarfcount.xml", 'w') { |fd| fd.puts lin_startdwarfcount }
+end
+
+if not File.file?("win_#{version}_startdwarfcount.xml")
+puts "win_startdwarfcount"
+sizeunit_win = `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml windows`
+win_startdwarfcount = `ruby #{misc_path}/scan_startdwarfcount.rb #{win_bin.shellescape} #{sizeunit_win}`
+File.open("win_#{version}_startdwarfcount.xml", 'w') { |fd| fd.puts win_startdwarfcount }
+end
+
+if not File.file?("osx_#{version}_startdwarfcount.xml")
+puts "osx_startdwarfcount"
+sizeunit_lin ||= `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml linux`
+osx_startdwarfcount = `ruby #{misc_path}/scan_startdwarfcount.rb #{osx_bin.shellescape} #{sizeunit_lin}`
+File.open("osx_#{version}_startdwarfcount.xml", 'w') { |fd| fd.puts osx_startdwarfcount }
+end
+
 
 if not File.file?(win_bin + '.bak')
-	puts "win_patchmalloc"
-	system 'ruby', misc_path+'/df_patchmalloc.rb', win_bin
+puts "win_patchmalloc"
+system 'ruby', misc_path+'/df_patchmalloc.rb', win_bin
 end
 
 puts "done, archives in #{tmp_path}/df_{lin,win,osx}_#{version}"
