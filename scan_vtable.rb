@@ -119,6 +119,7 @@ scanptrs(file_raw, strings) { |off, str|
 
 # find [address, length] of the .text section
 text = (dasm.section_info.assoc('.text') || dasm.section_info.assoc('__text')).values_at(1, 2)
+plt = dasm.section_info.assoc('.plt').values_at(1, 2) rescue nil
 
 # vtable 
 vtable = {}
@@ -127,11 +128,12 @@ scanptrs(file_raw, sptr) { |off, str|
 
 	# check that we have an actual function pointer here (eg into .text)
 	vf = dasm.decode_dword(vaddr)
-	next if not vf.kind_of?(Integer) or vf < text[0] or vf > text[0]+text[1]
-
-	s = demangle_str(str)
-	vtable[s] ||= []
-	vtable[s] << vaddr
+	next if not vf.kind_of?(Integer)
+	if vf == 0 or (vf >= text[0] and vf < text[0] + text[1]) or (plt and vf >= plt[0] and vf < plt[0] + plt[1])
+		s = demangle_str(str)
+		vtable[s] ||= []
+		vtable[s] << vaddr
+	end
 }
 
 # return the array of virtual functions in a table (sequence of pointers inside .text)
@@ -140,15 +142,16 @@ vt_funcs = lambda { |vt_addr|
 	a = vt_addr
 	loop do
 		vf = dasm.normalize(dasm.decode_dword(a))
-		break if not vf.kind_of?(Integer) or vf < text[0] or vf > text[0]+text[1]
+		break if not vf.kind_of?(Integer) or (vf < text[0] and vf != 0) or vf > text[0]+text[1]
 		out << vf
 		a += 4
 	end
+	out.pop while out[-1] == 0
 	out
 }
 
 def analyse_vfunc(dasm, addr)
-	return "" if not $scanargs
+	return "" if not $scanargs or addr == 0
 
 	dasm.disassemble_fast(addr)
 
