@@ -580,6 +580,12 @@ sub render_item_primitive {
     if ($subtype eq 'stl-string') {
         push @lines, "struct stl_string";
         $lines[$#lines] .= " $name" if ($name);
+    } elsif ($subtype eq 'stl-fstream') {
+        if ($linux) {
+            push @lines, "int32_t fstream[71]";     # (284 bytes, 4o align)
+        } else {
+            push @lines, "int64_t fstream[23]";     # (184 bytes, 8o align)
+        }
     } else {
         print "no render primitive $subtype\n";
     }
