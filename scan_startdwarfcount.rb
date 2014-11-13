@@ -35,11 +35,11 @@ p off_sz, candidates_7 if $DEBUG
 # look for the loop condition thing
 candidates_7.each { |addr_7|
 	# scan for the instruction containing '7' as 2nd argument
-	di_addr = addr_7 - 2
+	di_addr = addr_7 - 1
 	di = nil
 	8.times { |i|
 		di = dasm.disassemble_instruction(di_addr)
-		break if di and di.instruction.args[1] == Metasm::Expression[7]
+		break if di and di.instruction.args[1] == Metasm::Expression[7] and di.bin_length > 4
 		di_addr -= 1
 		di = nil
 	}
@@ -72,6 +72,7 @@ candidates_7.each { |addr_7|
 		ebl.list[-2].instruction.args[0].to_s == store
 	}
 		puts ebl.list[-2, 2] if $VERBOSE
-		puts "<global-address name='start_dwarf_count' value='0x%x' fileoff='0x%x'/>" % [addr_7, dasm.addr_to_fileoff(addr_7)]
+		puts "fileoff='0x%x" % dasm.addr_to_fileoff(addr_7) if $VERBOSE
+		puts "<global-address name='start_dwarf_count' value='0x%x'/>" % addr_7
 	end
 }
