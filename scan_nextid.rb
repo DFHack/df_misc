@@ -47,10 +47,18 @@ strings.each { |addr, str|
 	id_addr = nil
 	10.times {
 		di = dasm.di_including(a)
+		if not di
+			a = a-1
+			next
+		end
 		if di.opcode.name == 'jl'
 			# find previous 'cmp'
 			10.times {
 				di = dasm.di_including(a)
+				if not di
+					a = a-1
+					next
+				end
 				if di.opcode.name == 'cmp' and mrm = di.instruction.args.grep(Metasm::Ia32::ModRM)[0]
 					id_addr = dasm.normalize mrm.imm
 					break
