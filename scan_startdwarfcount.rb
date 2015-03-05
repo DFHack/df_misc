@@ -62,7 +62,7 @@ candidates_7.each { |addr_7|
 
 	# take all addresses jumping to the blocks following loop_init
 	endaddrs = loop_init.to_normal.map { |loop_body_addr|
-		dasm.block_at(loop_body_addr).from_normal
+		dasm.block_at(loop_body_addr).from_normal rescue []
 	}.flatten - [loop_init.list.last.address]
 
 	# search if the next-to-last instr uses 'store', eg  cmp eax, 0  jnz loop_body

@@ -30,7 +30,7 @@ if not File.directory?(lin_tmp)
 	File.open(lin_tmp + '/' + lin_binary_url, 'w') { |fd| fd.write open(base_url + lin_binary_url).read }
 	puts "extracting"
 	Dir.chdir(lin_tmp) { system 'tar', 'xf', lin_binary_url }
-	Dir.entries(lin_tmp+'/df_linux').each { |e| next if e == '.' or e == '..' ; File.rename lin_tmp+'/df_linux/'+e, lin_tmp+'/'+e }
+	Dir.entries(File.join(lin_tmp, 'df_linux')).each { |e| next if e == '.' or e == '..' ; File.rename(File.join(lin_tmp, 'df_linux', e), File.join(lin_tmp, e)) }
 	Dir.rmdir(lin_tmp+'/df_linux')
 end
 lin_bin = File.join(lin_tmp, 'libs', 'Dwarf_Fortress')
