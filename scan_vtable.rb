@@ -64,7 +64,7 @@ if dasm.program.shortname == 'coff'
 	
 	# .?AVclassst@@ / .?AUstructst@@
 
-	dasm.pattern_scan(/\.\?A[UV]\w+st@@/) { |addr|
+	dasm.pattern_scan(/\.\?A[UV]\w+@@/) { |addr|
 		strings[addr-8] = dasm.decode_strz(addr)
 	}
 	dasm.pattern_scan(/\.\?A[UV]renderer(_\w+)?@@/) { |addr|
@@ -90,7 +90,7 @@ else
 	# typeinfoptr+4 mangled_classname_ptr
 
 
-	dasm.pattern_scan(/\d+\w+st\0/) { |addr|
+	dasm.pattern_scan(/\d+\w+\0/) { |addr|
 		strings[addr] = dasm.decode_strz(addr)
 	}
 	dasm.pattern_scan(/\d+renderer(_\w+)?\0/) { |addr|
