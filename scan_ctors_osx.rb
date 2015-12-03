@@ -50,6 +50,7 @@ ctorlist.each { |ct|
 			arg2 = dasm.backtrace(Metasm::Indirection[[:esp, :+, 4], 4], call.address)[0].reduce
 
 			next if arg1.to_s =~ /^__Z/	# std destructors
+			next if not arg2.kind_of?(::Integer)	# ???
 			#next if arg2 == 0
 
 			globals << [ct, arg2, call.address]
