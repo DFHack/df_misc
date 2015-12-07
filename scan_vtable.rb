@@ -41,6 +41,10 @@ def scanptrs(raw, hash)
 end
 
 
+# regexp to match class names from the binary
+vclass_names = ['\w+st', 'renderer(_\w+)?', '\w*Screen\w*']
+vclass_names_re = '(' + vclass_names.join('|') + ')'
+
 strings = {}
 
 if dasm.program.shortname == 'coff'
@@ -64,13 +68,7 @@ if dasm.program.shortname == 'coff'
 
 	# .?AVclassst@@ / .?AUstructst@@
 
-	dasm.pattern_scan(/\.\?A[UV]\w+st@@/) { |addr|
-		strings[addr-8] = dasm.decode_strz(addr)
-	}
-	dasm.pattern_scan(/\.\?A[UV]renderer(_\w+)?@@/) { |addr|
-		strings[addr-8] = dasm.decode_strz(addr)
-	}
-	dasm.pattern_scan(/\.\?A[UV]\w*Screen\w*@@/) { |addr|
+	dasm.pattern_scan(/\.\?A[UV]#{vclass_names_re}@@/) { |addr|
 		strings[addr-8] = dasm.decode_strz(addr)
 	}
 
@@ -93,13 +91,7 @@ else
 	# typeinfoptr+4 mangled_classname_ptr
 
 
-	dasm.pattern_scan(/\d+\w+st\0/) { |addr|
-		strings[addr] = dasm.decode_strz(addr)
-	}
-	dasm.pattern_scan(/\d+renderer(_\w+)?\0/) { |addr|
-		strings[addr] = dasm.decode_strz(addr)
-	}
-	dasm.pattern_scan(/\d+\w*Screen\w*\0/) { |addr|
+	dasm.pattern_scan(/\d+#{vclass_names_re}\0/) { |addr|
 		strings[addr] = dasm.decode_strz(addr)
 	}
 
