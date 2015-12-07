@@ -61,13 +61,16 @@ if dasm.program.shortname == 'coff'
 	# mangled_classname_ptr   dd ?
 	# mangled_classname_ptr+4 dd 0
 	# mangled_classname_ptr+8 db ".?AVbuilding_bedst@@"
-	
+
 	# .?AVclassst@@ / .?AUstructst@@
 
 	dasm.pattern_scan(/\.\?A[UV]\w+st@@/) { |addr|
 		strings[addr-8] = dasm.decode_strz(addr)
 	}
 	dasm.pattern_scan(/\.\?A[UV]renderer(_\w+)?@@/) { |addr|
+		strings[addr-8] = dasm.decode_strz(addr)
+	}
+	dasm.pattern_scan(/\.\?A[UV]\w*Screen\w*@@/) { |addr|
 		strings[addr-8] = dasm.decode_strz(addr)
 	}
 
@@ -96,6 +99,9 @@ else
 	dasm.pattern_scan(/\d+renderer(_\w+)?\0/) { |addr|
 		strings[addr] = dasm.decode_strz(addr)
 	}
+	dasm.pattern_scan(/\d+\w*Screen\w*\0/) { |addr|
+		strings[addr] = dasm.decode_strz(addr)
+	}
 
 	def demangle_str(s)
 		len = s[/^\d+/]
@@ -121,7 +127,7 @@ scanptrs(file_raw, strings) { |off, str|
 text = (dasm.section_info.assoc('.text') || dasm.section_info.assoc('__text')).values_at(1, 2)
 plt = dasm.section_info.assoc('.plt').values_at(1, 2) rescue nil
 
-# vtable 
+# vtable
 vtable = {}
 scanptrs(file_raw, sptr) { |off, str|
 	vaddr = dasm.fileoff_to_addr(off) + 4
