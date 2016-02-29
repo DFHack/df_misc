@@ -28,7 +28,7 @@ off_sz = dasm.pattern_scan([sizeofunit].pack('L'))
 
 # search close couples
 puts 'proximity scan' if $VERBOSE
-candidates_7 = off_7.find_all { |a7| off_sz.find { |au| au > a7 and au < a7 + 32 } }
+candidates_7 = off_7.find_all { |a7| off_sz.find { |au| au > a7 and au < a7 + 64 } }
 
 p off_sz, candidates_7 if $DEBUG
 
