@@ -94,10 +94,10 @@ list.each { |header, strings|
     end
     puts "code at %x" % code if $VERBOSE
     if defined? @osx_xref_getip
-	    puts "getip at %x" % @osx_xref_getip[0] if $VERBOSE
-	    dasm.disassemble_fast_deep(@osx_xref_getip[0])
+        puts "getip at %x" % @osx_xref_getip[0] if $VERBOSE
+        dasm.disassemble_fast_deep(@osx_xref_getip[0])
     else
-	    dasm.disassemble_fast(code+4)
+        dasm.disassemble_fast(code+4)
     end
 
     xml = []
@@ -120,14 +120,15 @@ list.each { |header, strings|
         # we are now at the 'mov eax, a_zoneonlydrinking'
         xr_block = dasm.block_including(xr)
         # move up to the 'jz' block
-        while xr_block.to_normal.to_a.length != 2
+        cmp = mrm = nil
+        while xr_block.to_normal.to_a.length != 2 or not cmp = xr_block.list.reverse.find { |op|
+            mrm = op.instruction.args.grep(Metasm::Ia32::ModRM)[0]
+        } or mrm.sz != 8
             from = (xr_block.from_subfuncret || xr_block.from_normal)[0]
             xr_block = dasm.block_at(from)
         end
         # find the condition
         #puts xr_block.list if $VERBOSE
-        cmp = xr_block.list.reverse.find { |op| op.instruction.args.grep(Metasm::Ia32::ModRM)[0] }
-        mrm = cmp.instruction.args.grep(Metasm::Ia32::ModRM)[0]
         addr = dasm.backtrace(mrm.symbolic.target, cmp.address)[0].reduce
 
         xml << "<global-address name='standing_orders_#{global}' value='0x#{'%08x' % addr}'/>"
