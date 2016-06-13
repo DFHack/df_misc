@@ -384,8 +384,9 @@ sub render_item_global {
     my $tname = $type->getAttribute('original-name') ||
             $type->getAttribute('type-name') ||
             $typename;
+    my $tm = $type->getAttribute('ld:meta');
 
-    if ($subtype and $subtype eq 'enum') {
+    if (($subtype and $subtype eq 'enum') or ($tm and $tm eq 'enum-type')) {
         #push @lines, "enum $typename $name;";  # this does not handle int16_t enums
         render_item_number($item, $name);
     } else {
@@ -447,7 +448,7 @@ sub render_item_compound {
         $lines[$#lines] .= " $name" if ($name);
 
     } elsif ($subtype eq 'enum') {
-        if (!$item->getAttribute('typename')) {
+        if (!$item->getAttribute('type-name')) {
             # inline enum
             render_global_enum($sname, $item); 
             render_item_number($item, $name, $sname);
