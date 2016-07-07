@@ -16,8 +16,8 @@ page = open(base_url).read
 
 # <a href="df_34_10_win_s.zip">Windows (No Music)</a><a href="df_34_10_linux.tar.bz2">Linux</a>
 lin_binary_url = page[/<a href="(.*?)">linux<\/a>/i, 1]
-win_binary_url = page[/<a href="(.*?)">windows \(no music\)<\/a>/i, 1]
-osx_binary_url = page[/<a href="(.*?)">mac \(intel\)<\/a>/i, 1]
+win_binary_url = page[/<a href="(.*?)">windows<\/a>/i, 1]
+osx_binary_url = page[/<a href="(.*?)">mac<\/a>/i, 1]
 
 version = lin_binary_url[/df_(.*)_linux\.tar\.bz2/, 1]
 
