@@ -10,11 +10,14 @@ abort "usage: scan_vtable.rb /path/to/df_exe [--map] [--dumpfuncs] [--args]" if 
 ENV['METASM_NODECODE_RELOCS'] = '1'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
 
+$ptrsz = 4
+$ptrsz = 8 if dasm.cpu.size == 64
+
 Metasm::DynLdr.new_func_c <<EOC
 #line #{__LINE__}
 // return the index in str where it contains one of ptrs
 // starts from the end, iterate by restarting at last offset found
-int scanptrs(char *str, int strlen, unsigned __int32 *ptrs, int ptrslen) {
+int scanptrs32(char *str, int strlen, unsigned __int32 *ptrs, int ptrslen) {
 	int i;
 	unsigned __int32 p;
 	if (ptrslen > 0)
@@ -28,15 +31,40 @@ int scanptrs(char *str, int strlen, unsigned __int32 *ptrs, int ptrslen) {
 		}
 	return -1;
 }
+
+int scanptrs64(char *str, int strlen, unsigned __int64 *ptrs, int ptrslen) {
+	int i;
+	unsigned __int64 p;
+	if (ptrslen > 0)
+		for (i=strlen-8; i ; --i) {
+			p = *(unsigned __int64 *)(str+i);
+			if ((p < ptrs[0]) || (p > ptrs[ptrslen-1]))
+				continue;
+			for (int j=0 ; j<ptrslen ; ++j)
+				if (p == ptrs[j])
+					return i;
+		}
+	return -1;
+}
 EOC
 
-def scanptrs(raw, hash)
+def scanptrs(raw, hash, ptrsz=$ptrsz)
 	off = raw.length
-	ptrs = hash.keys.sort.pack('L*')
+	if ptrsz == 4
+		ptrs = hash.keys.sort.pack('L*')
+	else
+		ptrs = hash.keys.sort.pack('Q*')
+	end
 	loop do
-		off = Metasm::DynLdr.scanptrs(raw, off, ptrs, hash.length)
-		break if off < 0
-		yield [off, hash[raw[off, 4].unpack('L')[0]]]
+		if ptrsz == 4
+			off = Metasm::DynLdr.scanptrs32(raw, off, ptrs, hash.length)
+			break if off < 0
+			yield [off, hash[raw[off, 4].unpack('L')[0]]]
+		else
+			off = Metasm::DynLdr.scanptrs64(raw, off, ptrs, hash.length)
+			break if off < 0
+			yield [off, hash[raw[off, 8].unpack('Q')[0]]]
+		end
 	end
 end
 
@@ -67,9 +95,23 @@ if dasm.program.shortname == 'coff'
 	# mangled_classname_ptr+8 db ".?AVbuilding_bedst@@"
 
 	# .?AVclassst@@ / .?AUstructst@@
+	
+	# MSVC2015 x64 vtable:
+	# vtable-8     dq typeinfoptr
+	#
+	# typeinfoptr  dd ?
+	#              dd 0
+	#              dd 0
+	#              dd rva mangled_classname_ptr
+	#
+	# mangled_classname_ptr dq ?
+	#                       dq 0
+	#                       db ".?AVbuilding_bedst@@"
 
 	dasm.pattern_scan(/\.\?A[UV]#{vclass_names_re}@@/) { |addr|
-		strings[addr-8] = dasm.decode_strz(addr)
+		key = addr - 2*$ptrsz
+		key -= dasm.program.optheader.image_base if $ptrsz == 8
+		strings[key] = dasm.decode_strz(addr)
 	}
 
 	def demangle_str(s)
@@ -100,7 +142,7 @@ else
 		s[len.length, len.to_i]
 	end
 
-	classname_offset = 0x4
+	classname_offset = $ptrsz
 
 	gcc_hint = true
 end
@@ -110,7 +152,9 @@ end
 file_raw = File.open(binpath, 'rb') { |fd| fd.read }
 
 sptr = {}
-scanptrs(file_raw, strings) { |off, str|
+ptrsz = $ptrsz
+ptrsz = 4 if $is_windows and $ptrsz == 8
+scanptrs(file_raw, strings, ptrsz) { |off, str|
 	vaddr = dasm.fileoff_to_addr(off) - classname_offset
 	sptr[vaddr] = str
 }
@@ -122,7 +166,7 @@ plt = dasm.section_info.assoc('.plt').values_at(1, 2) rescue nil
 # vtable
 vtable = {}
 scanptrs(file_raw, sptr) { |off, str|
-	vaddr = dasm.fileoff_to_addr(off) + 4
+	vaddr = dasm.fileoff_to_addr(off) + $ptrsz
 
 	# check that we have an actual function pointer here (eg into .text)
 	vf = dasm.decode_dword(vaddr)
@@ -142,7 +186,7 @@ vt_funcs = lambda { |vt_addr|
 		vf = dasm.normalize(dasm.decode_dword(a))
 		break if not vf.kind_of?(Integer) or (vf < text[0] and vf != 0) or vf > text[0]+text[1]
 		out << vf
-		a += 4
+		a += $ptrsz
 	end
 	out.pop while out[-1] == 0
 	out
@@ -190,7 +234,7 @@ vtable.sort.each { |str, vaddrs|
 		puts "%08x d vtable_%s" % [vaddrs[0], str]
 		if dumpfuncs
 			vt_funcs[vaddrs[0]].each_with_index { |vf, idx|
-				puts "%08x d vfunc_%s_%x" % [vf, str, 4*idx]
+				puts "%08x d vfunc_%s_%x" % [vf, str, $ptrsz*idx]
 			}
 		end
 	elsif dumpfuncs
