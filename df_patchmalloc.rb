@@ -15,94 +15,15 @@ pe = Metasm::PE.decode_file(bin, :nodecode_relocs)
 dasm = pe.disassembler
 dasm.load_plugin 'patch_file'
 
-# TODO reuse COFF::Header etc
-# structs from slipfest/pe.h
-dasm.parse_c <<EOS
-#define u8  unsigned char
-#define u16 unsigned short
-#define u32 unsigned int
-#define u64 unsigned long long
-
-struct coff_file_header
-{
-  u16 machine;
-  u16 number_of_sections;
-  u32 timestamp;
-  u32 pointer_to_symboltable;
-  u32 number_of_symbols;
-  u16 size_of_optional_header;
-  u16 characteristics;
-};
-
-struct coff_directory
-{
-  u32 rva;
-  u32 size;
-};
-
-struct coff_optional_header
-{
-  u16 magic;
-  u8  major_linker_version;
-  u8  minor_linker_version;
-  u32 size_of_code;
-  u32 size_of_initialized_data;
-  u32 size_of_uninitialized_data;
-  u32 entrypoint;
-  u32 base_of_code;
-  u32 base_of_data;
-
-  u32 image_base;
-  u32 section_alignment;
-  u32 file_alignment;
-  u16 major_os_version;
-  u16 minor_os_version;
-  u16 major_image_version;
-  u16 minor_image_version;
-  u16 major_subsystem_version;
-  u16 minor_subsystem_version;
-  u32 win32_version_value;
-  u32 size_of_image;
-  u32 size_of_headers;
-  u32 checksum;
-  u16 subsystem;
-  u16 dll_characteristics;
-  u32 size_of_stack_reserve;
-  u32 size_of_stack_commit;
-  u32 size_of_heap_reserve;
-  u32 size_of_heap_commit;
-  u32 loader_flags;
-  u32 number_of_rva_and_sizes;
-  struct coff_directory data_directory[0];
-};
-
-struct coff_full_header {
-	struct coff_file_header header;
-	struct coff_optional_header optheader;
-};
-
-struct coff_section_header
-{
-  char name[8];
-  u32 virtual_size;
-  u32 virtual_address;
-  u32 size_of_raw_data;
-  u32 pointer_to_raw_data;
-  u32 pointer_to_relocations;
-  u32 pointer_to_linenumbers;
-  u16 number_of_relocations;
-  u16 number_of_linenumbers;
-  u32 characteristics;
-};
-EOS
+dasm.parse_c 'struct dll_characteristics { unsigned __int32 dll_characteristics; };'
 
 puts 'patch DYNAMIC_BASE'
-hdr = dasm.decode_c_struct('coff_full_header', pe.optheader.image_base + pe.coff_offset)
-case hdr.dll_characteristics
-when 0x8140
-	hdr.dll_characteristics = 0x8100
-when 0x8100
-	puts 'already patched'
+dlc = dasm.decode_c_struct('dll_characteristics', pe.optheader.image_base + pe.coff_offset + pe.header.sizeof(pe) + pe.optheader.offsetof(pe, :dll_characts))
+case dlc.dll_characteristics
+when 0x8140, 0x8160
+	dlc.dll_characteristics ^= 0x40
+when 0x8100, 0x8120
+	puts 'dll_characteristics already patched'
 else
 	raise 'invalid dll_characteristics!'
 end
