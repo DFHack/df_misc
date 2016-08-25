@@ -23,6 +23,14 @@ version = lin_binary_url[/df_(.*)_linux\.tar\.bz2/, 1]
 
 puts "latest version: #{version}"
 
+[64, 32].each { |bits|
+	if bits == 32
+		version += '_32bits'
+		lin_binary_url.sub!(/.tar.bz2$/, '32.tar.bz2')
+		win_binary_url.sub!(/.zip$/, '32.zip')
+		osx_binary_url.sub!(/.tar.bz2$/, '32.tar.bz2')
+	end
+
 lin_tmp = File.join(tmp_path, "df_lin_#{version}")
 if not File.directory?(lin_tmp)
 	puts "dl linux #{lin_binary_url}"
@@ -164,3 +172,4 @@ system 'ruby', misc_path+'/df_patchmalloc.rb', win_bin
 end
 
 puts "done, archives in #{tmp_path}/df_{lin,win,osx}_#{version}"
+}

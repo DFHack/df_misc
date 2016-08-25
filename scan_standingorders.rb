@@ -104,7 +104,7 @@ list.each { |header, strings|
     strings.each { |str, global|
         nextaddr = dasm.pattern_scan(str, hdr_addr, 0x10000)[0]
         if not nextaddr
-            puts "cant find string #{header.inspect} #{str.inspect} after %x" % str_addr
+            puts "cant find string #{header.inspect} #{str.inspect} after %x" % hdr_addr
             next
         end
         str_addr = nextaddr
