@@ -227,6 +227,13 @@ vtable.sort.each { |str, vaddrs|
 		puts "conflict: original = #{vaddrs.map { |va| '0x%x' % va }.join('|')}, better = #{better.map { |va| '0x%x' % va }.join('|')}" if $VERBOSE
 		vaddrs = better if better.length == 1
 	end
+	if vaddrs.length > 1
+		# gcc64bits: looks like all subclasses have a <typeinfo_ptr> <0> which is mistaken for the vtable by the script, drop the entries where the 1st virtual function is the NULL ptr
+		# win32 has similar stuff
+		better = vaddrs.find_all { |va| dasm.decode_dword(va) != 0 }
+		puts "conflict: original = #{vaddrs.map { |va| '0x%x' % va }.join('|')}, better2 = #{better.map { |va| '0x%x' % va }.join('|')}" if $VERBOSE
+		vaddrs = better if better.length == 1
+	end
 
 	if vaddrs.length != 1
 		puts "<!-- CONFLICT vtable-address name='#{str}' value='#{vaddrs.map { |va| '0x%x' % va }.join(' or ')}'/ -->"
