@@ -11,6 +11,7 @@ misc_path = File.dirname(__FILE__)
 tmp_path = File.expand_path("~/tmp/")
 base_url = 'http://www.bay12games.com/dwarves/'
 
+if ARGV.empty?
 puts "read bay12 homepage"
 page = open(base_url).read
 
@@ -22,6 +23,10 @@ osx_binary_url = page[/<a href="(.*?)">mac<\/a>/i, 1]
 version = lin_binary_url[/df_(.*)_linux\.tar\.bz2/, 1]
 
 puts "latest version: #{version}"
+else
+	version = ARGV.shift
+	lin_binary_url = win_binary_url = osx_binary_url = ''
+end
 
 [64, 32].each { |bits|
 	if bits == 32
