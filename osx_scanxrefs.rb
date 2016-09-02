@@ -1,11 +1,59 @@
 
 # returns a list of addresses of pointers to target from the code section
 def scan_code_xrefs(dasm, target, threshold=0x400)
-	if dasm.program.kind_of?(Metasm::MachO)
-		return scan_xrefs_osx(dasm, target, threshold)
+	out = dasm.pattern_scan([target].pack('L'))
+	if dasm.cpu.size == 64
+		out.concat scan_xrefs_rel(dasm, target)
+	elsif dasm.program.kind_of?(Metasm::MachO)
+		out.concat scan_xrefs_osx(dasm, target, threshold)
+	end
+	out
+end
+
+#
+# 64bit code uses rip-relative adressing:
+# some_addr:
+#   mov rax, [rip + offset - some_addr_next]
+# some_addr_next:
+#   cmp rax, 0
+#
+# so the instruction hexadecimal code actually contains only the 32bit offset
+# from the end of current instruction to the target address
+#
+def scan_xrefs_rel(dasm, target)
+	if not Metasm::DynLdr.respond_to?(:scan_rel)
+		# JIT a method to scan for the relative offset
+		# full scan by starting with section_sz = real section size, and
+		#  call again with section_sz = addr of last match
+		Metasm::DynLdr.new_func_c <<EOC
+unsigned scan_rel(unsigned target, char *section_raw, unsigned section_sz) {
+	unsigned i;
+	unsigned val;
+	for (i=section_sz-4 ; i ; --i) {
+		val = *(unsigned*)(section_raw+i);
+		if (i+4+val == target)
+			return i;
+	}
+	return 0;
+}
+EOC
+		text_edata, @rel_text_base = dasm.get_section_at('entrypoint')
+		@rel_text_raw = text_edata.data.to_str
+
+		$stderr.puts 'jitted' if $VERBOSE
 	end
 
-	dasm.pattern_scan([target].pack('L'))
+	off = @rel_text_raw.length
+	delta = target - @rel_text_base
+
+	xref_list = []
+	@rel_xref_getip = []
+	while off > 0
+		off = Metasm::DynLdr.scan_rel(delta, @rel_text_raw, off)
+		xref_addr = @rel_text_base + off
+		xref_list << xref_addr
+	end
+	xref_list
 end
 
 #
@@ -30,7 +78,7 @@ end
 #
 def scan_xrefs_osx(dasm, target, threshold)
 	if not @osx_getip ||= nil
-		puts 'scan geteip' if $VERBOSE
+		$stderr.puts 'scan geteip' if $VERBOSE
 		@osx_getip = dasm.pattern_scan(/\x8b\x1c\x24\xc3/n)[0]
 		raise 'cannot find osx getip' if not @osx_getip
 		# actually disassemble the function for backtracking later
@@ -58,7 +106,7 @@ EOC
 		text_edata, @osx_text_base = dasm.get_section_at(@osx_getip)
 		@osx_text_raw = text_edata.data.to_str
 
-		puts 'jitted' if $VERBOSE
+		$stderr.puts 'jitted' if $VERBOSE
 	end
 
 	off = @osx_text_raw.length

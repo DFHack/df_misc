@@ -20,32 +20,33 @@ require 'osx_scanxrefs'
 # disable decoding of relocs, takes a while for win binary ASLR aware
 ENV['METASM_NODECODE_RELOCS'] = '1'
 
-puts 'read file' if $VERBOSE
+$stderr.puts 'read file' if $VERBOSE
 binpath = ARGV.shift || 'Dwarf Fortress.exe'	# works with linux too
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
 
-puts 'scan "invalid id" strings' if $VERBOSE
+$stderr.puts 'scan "invalid id" strings' if $VERBOSE
 strings = {}
 dasm.pattern_scan(/Load Game: Invalid (\w|\s)* ID Number/) { |addr|
 	strings[addr] = dasm.decode_strz(addr)
 }
 
 xml = []
-puts 'dasm xrefs' if $VERBOSE
+$stderr.puts 'dasm xrefs' if $VERBOSE
 strings.each { |addr, str|
-	xo = scan_code_xrefs(dasm, addr)[0]
-	if !xo
-		puts "no xref for #{str.inspect}"
+	xo = scan_code_xrefs(dasm, addr)
+	if xo.empty?
+		$stderr.puts "no xref for #{str.inspect}"
 		next
 	end
 
+	id_addr = nil
+xo.each { |xoa|
 	# found the xref: disassemble next instruction, will loop back where we need
-	dasm.disassemble_fast(xo+4)
+	dasm.disassemble_fast(xoa+4)
 
 	# find the previous 'jl'
-	a = xo
-	id_addr = nil
-	10.times {
+	a = xoa
+	16.times {
 		di = dasm.di_including(a)
 		if not di
 			a = a-1
@@ -59,8 +60,23 @@ strings.each { |addr, str|
 					a = a-1
 					next
 				end
-				if di.opcode.name == 'cmp' and mrm = di.instruction.args.grep(Metasm::Ia32::ModRM)[0]
+				if di.opcode.name == 'cmp' and mrm = di.instruction.args.find { |arg| arg.class.name.split('::').last == 'ModRM' }
 					id_addr = dasm.normalize mrm.imm
+					if id_addr.to_i < 0x1000 and dasm.cpu.size == 64
+						id_addr = nil
+
+						# win x64: code is actually
+						# mov eax, [rip-$_+xref_nextid]
+						#  cmp [esi+128], eax
+						#  jl label_whatever
+
+						if di = dasm.di_including(di.address-1)
+							mrm = di.instruction.args.find { |arg| arg.class.name.split('::').last == 'ModRM' }
+							if mrm.b.to_s == 'rip' or mrm.i.to_s == 'rip'
+								id_addr = dasm.normalize(mrm.imm) + di.next_addr
+							end
+						end
+					end
 					break
 				end
 				a = di.address-1
@@ -69,9 +85,11 @@ strings.each { |addr, str|
 		end
 		a = di.address-1
 	}
+	break if id_addr
+}
 
 	if !id_addr
-		puts "no pattern for #{str.inspect}"
+		$stderr.puts "no pattern for #{str.inspect}"
 		next
 	end
 
