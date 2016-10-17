@@ -151,21 +151,21 @@ end
 
 if not File.file?("lin_#{version}_startdwarfcount.xml")
 puts "lin_startdwarfcount"
-sizeunit_lin = `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml linux`
+sizeunit_lin = `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml linux #{bits}`
 lin_startdwarfcount = `ruby #{misc_path}/scan_startdwarfcount.rb #{lin_bin.shellescape} #{sizeunit_lin}`
 File.open("lin_#{version}_startdwarfcount.xml", 'w') { |fd| fd.puts lin_startdwarfcount }
 end
 
 if not File.file?("win_#{version}_startdwarfcount.xml")
 puts "win_startdwarfcount"
-sizeunit_win = `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml windows`
+sizeunit_win = `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml windows #{bits}`
 win_startdwarfcount = `ruby #{misc_path}/scan_startdwarfcount.rb #{win_bin.shellescape} #{sizeunit_win}`
 File.open("win_#{version}_startdwarfcount.xml", 'w') { |fd| fd.puts win_startdwarfcount }
 end
 
 if not File.file?("osx_#{version}_startdwarfcount.xml")
 puts "osx_startdwarfcount"
-sizeunit_lin ||= `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml linux`
+sizeunit_lin ||= `perl get_sizeofunit.pl ../dfhack/library/include/df/codegen.out.xml linux #{bits}`
 osx_startdwarfcount = `ruby #{misc_path}/scan_startdwarfcount.rb #{osx_bin.shellescape} #{sizeunit_lin}`
 File.open("osx_#{version}_startdwarfcount.xml", 'w') { |fd| fd.puts osx_startdwarfcount }
 end
