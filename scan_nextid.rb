@@ -39,6 +39,8 @@ strings.each { |addr, str|
 		next
 	end
 
+	$stderr.puts "xrefs: #{xo.inspect} to #{str}" if $VERBOSE
+
 	id_addr = nil
 xo.each { |xoa|
 	# found the xref: disassemble next instruction, will loop back where we need
@@ -62,19 +64,21 @@ xo.each { |xoa|
 				end
 				if di.opcode.name == 'cmp' and mrm = di.instruction.args.find { |arg| arg.class.name.split('::').last == 'ModRM' }
 					id_addr = dasm.normalize mrm.imm
-					if id_addr.to_i < 0x1000 and dasm.cpu.size == 64
-						id_addr = nil
+					if dasm.cpu.size == 64
+						if id_addr.to_i < 0x1000
+							id_addr = nil
 
-						# win x64: code is actually
-						# mov eax, [rip-$_+xref_nextid]
-						#  cmp [esi+128], eax
-						#  jl label_whatever
+							# win x64: code is actually
+							# mov eax, [rip-$_+xref_nextid]
+							#  cmp [esi+128], eax
+							#  jl label_whatever
 
-						if di = dasm.di_including(di.address-1)
-							mrm = di.instruction.args.find { |arg| arg.class.name.split('::').last == 'ModRM' }
-							if mrm.b.to_s == 'rip' or mrm.i.to_s == 'rip'
-								id_addr = dasm.normalize(mrm.imm) + di.next_addr
+							if di = dasm.di_including(di.address-1)
+								mrm = di.instruction.args.find { |arg| arg.class.name.split('::').last == 'ModRM' }
 							end
+						end
+						if mrm and (mrm.b.to_s == 'rip' or mrm.i.to_s == 'rip')
+							id_addr = dasm.normalize(mrm.imm) + di.next_addr
 						end
 					end
 					break
