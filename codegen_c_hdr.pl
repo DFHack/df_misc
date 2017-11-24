@@ -214,6 +214,9 @@ sub render_global_class {
     }
 
     push @lines, "struct $rtti_name {";
+    if ($type->getAttribute('is-union')) {
+        push @lines, "  union {";
+    }
     indent {
         if ($parent) {
             push @lines, "struct $parent super;";
@@ -222,6 +225,10 @@ sub render_global_class {
         }
         render_struct_fields($type);
     };
+
+    if ($type->getAttribute('is-union')) {
+        push @lines, "  };";
+    }
 
     # GCC: class a { vtable; char; } ; class b:a { char c2; } -> c2 has offset 5 (Windows MSVC: offset 8)
     my $magic_attr = '';
