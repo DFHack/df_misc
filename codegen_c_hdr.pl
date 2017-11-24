@@ -557,7 +557,6 @@ sub render_stlvector_ptr {
         $lines[$#lines] .= ';';
         push @lines, "void *endptr;";
         push @lines, "void *endalloc;";
-        push @lines, "int32_t pad;" if (!$linux);
     };
     push @lines, "}";
 }
@@ -592,7 +591,7 @@ sub render_item_primitive {
         if ($linux) {
             push @lines, "int32_t fstream[71]";     # (284 bytes, 4o align)
         } else {
-            push @lines, "int64_t fstream[23]";     # (184 bytes, 8o align)
+            push @lines, "int64_t fstream[24]";     # (192 bytes, 8o align)
         }
     } else {
         print "no render primitive $subtype\n";
@@ -658,7 +657,6 @@ struct stl_string {
     };
     int32_t len;
     int32_t capa;
-    int32_t pad;
 };
 
 struct stl_deque {
@@ -674,7 +672,6 @@ struct stl_vector_bool {
     char *ptr;
     char *endptr;
     char *endalloc;
-    int32_t pad;
     int size;
 };
 
