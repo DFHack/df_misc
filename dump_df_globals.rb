@@ -5,6 +5,9 @@ require 'metasm'
 # the table begins by dd 0x12345678 0x87654321 (32-bit) or dd 0x12345678 0x12345678 0x87654321 0x87654321 (64-bit)
 # then a succession of [<ptr to string with global name> <ptr to global variable>]
 
+dump_fmt = 'xml'
+dump_fmt = 'idc' if ARGV.delete '--idc'
+
 ENV['METASM_NODECODE_RELOCS'] = '1'
 binpath = ARGV.shift || 'Dwarf Fortress.exe'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
@@ -30,7 +33,7 @@ end
 $stderr.puts "Global table starts at #{Metasm::Expression[table_start]}"
 
 off = table_start + 2*bits/8
-xml = []
+out = []
 while true
 	ptr_str = dasm.decode_dword(off)
 	off += bits/8
@@ -38,7 +41,12 @@ while true
 	off += bits/8
 	break if ptr_str == 0
 	name = dasm.decode_strz(ptr_str)
-	xml << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}'/>"
+	case dump_fmt
+	when 'xml'
+		out << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}'/>"
+	when 'idc'
+		out << ('MakeName(0x%08X, "%s");' % [ptr_var, '_' + name.gsub(/[^\w]/, '_')])
+	end
 end
 
-puts xml
+puts out
