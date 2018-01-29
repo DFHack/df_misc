@@ -109,17 +109,98 @@ Dfhack_names = {
 	"next_unitchunk_global_id" => "unit_chunk_next_id",
 }
 
+Dfhack_noname = {
+	'jobvalue' => true,
+	'jobvalue_setter' => true,
+	'linelim' => true,
+	'line' => true,
+	'linechar' => true,
+	'cur_rain' => true,
+	'cur_snow' => true,
+	'cur_rain_counter' => true,
+	'cur_snow_counter' => true,
+	'weathertimer' => true,
+	'modeseason' => true,
+	'selectingtaskobject' => true,
+	'buildjob_mastering' => true,
+	'buildjob_give_to' => true,
+	'buildjob_popback' => true,
+	'buildjob_building' => true,
+	'buildjob_flowx' => true,
+	'buildjob_flowy' => true,
+	'buildjob_flowz' => true,
+	'buildjob_item1' => true,
+	'squadcount' => true,
+	'modestation' => true,
+	'unitprintstack' => true,
+	'unitprintstack_cur' => true,
+	'unitprintstack_start' => true,
+	'unitprintstack_clear' => true,
+	'olookx' => true,
+	'olooky' => true,
+	'olookz' => true,
+	'oscrollx' => true,
+	'oscrolly' => true,
+	'oscrollz' => true,
+	'page' => true,
+	'dunginv_relitem' => true,
+	'dunginv' => true,
+	'dunginv_inv' => true,
+	'dunginv_depth' => true,
+	'dunginv_flag' => true,
+	'dunginv_index' => true,
+	'throwitem' => true,
+	'dung_target' => true,
+	'dung_targlist' => true,
+	'interactitem' => true,
+	'interactinvslot' => true,
+	'dung_attackmode' => true,
+	'dung_dodgemode' => true,
+	'dung_chargedefendmode' => true,
+	'dung_swimmode' => true,
+	'handleannounce' => true,
+	'preserveannounce' => true,
+	'updatelightstate' => true,
+	'dung_buildinginteract' => true,
+	'soul_next_id' => true,
+	'task_next_id' => true,
+	'manucomp' => true,
+	'manucomp2' => true,
+	'filecomp_buffer' => true,
+	'filecomp_buffer2' => true,
+	'filecomp_buffer_aux' => true,
+	'filecomp_buffer2_aux' => true,
+	'DEBUG_SHOW_RIVER' => true,
+	'DEBUG_FASTCAVEIN' => true,
+	'DEBUG_ALWAYSHAPPY' => true,
+	'DEBUG_DISABLEHUMANCARAVAN' => true,
+	'DEBUG_GAMELOG' => true,
+	'mt_index' => true,
+	'mt_cur_buffer' => true,
+	'mt_virtual_buffer' => true,
+	'mt_buffer' => true,
+	'mt_virtual_seed_type' => true,
+}
+
 def dfhack_names(n)
-	Dfhack_names[n] or case n
-	when /^next_(.*)_global_id/
-		$1 + '_next_id'
-	#when /^standingorder/
+	if dn = Dfhack_names[n]
+		return dn
+	elsif Dfhack_noname[n]
 	else
-		n
+		case n
+		when /^index[12]_\d+$/
+			# discard
+		when /^next_(.*)_global_id/
+			$1 + '_next_id'
+		#when /^standingorder/
+		else
+			n
+		end
 	end
 end
 
 ENV['METASM_NODECODE_RELOCS'] = '1'
+dump_raw = true if ARGV.delete '--raw'
 binpath = ARGV.shift || 'Dwarf Fortress.exe'
 dasm = Metasm::AutoExe.decode_file(binpath).disassembler
 if dasm.cpu.size == 64
@@ -151,7 +232,9 @@ while true
 	ptr_var = dasm.decode_dword(off)
 	off += bits/8
 	break if ptr_str == 0
-	name = dfhack_names(dasm.decode_strz(ptr_str))
+	name = dasm.decode_strz(ptr_str)
+	name = dfhack_names(name) if not dump_raw
+	next if not name
 
 	case dump_fmt
 	when 'xml'
@@ -162,3 +245,4 @@ while true
 end
 
 puts out
+
