@@ -15,11 +15,17 @@ use strict;
 use warnings;
 
 
+# windows binary by default
 my $linux = grep { $_ eq '--linux' } @ARGV;
    @ARGV  = grep { $_ ne '--linux' } @ARGV if $linux;
 
+# ida compatible by default
 my $stdc = grep { $_ eq '--stdc' } @ARGV;
    @ARGV = grep { $_ ne '--stdc' } @ARGV if $stdc;
+
+# 64bit output by default
+my $bin32 = grep { $_ eq '--32' } @ARGV;
+   @ARGV  = grep { $_ ne '--32' } @ARGV if $bin32;
 
 my $input = $ARGV[0] || 'codegen/codegen.out.xml';
 my $output = $ARGV[1] || 'codegen.h';
@@ -644,6 +650,10 @@ typedef unsigned int       uint32_t;
 typedef unsigned long long uint64_t;
 
 EOS
+my $int3264 = 'int64_t';
+if ($bin32) {
+    $int3264 = 'int32_t';
+}
 
 my $vecpad = '';
 
@@ -655,8 +665,8 @@ struct stl_string {
         char buf[16];
         char *ptr;
     };
-    int32_t len;
-    int32_t capa;
+    $int3264 len;
+    $int3264 capa;
 };
 
 struct stl_deque {
@@ -665,7 +675,7 @@ struct stl_deque {
     int32_t map_size;
     int32_t off;
     int32_t size;
-    int32_t pad;
+    $int3264 pad;
 };
 
 struct stl_vector_bool {
@@ -676,7 +686,9 @@ struct stl_vector_bool {
 };
 
 EOS
-$vecpad = "    int32_t pad;\n";
+    if ($bin32) {
+        $vecpad = "    int32_t pad;\n";
+    }
 
 } else {
 $hdr .= <<EOS;
