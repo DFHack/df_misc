@@ -50,6 +50,8 @@ if lin_binary_url and not File.directory?(lin_tmp)
 end
 lin_bin = File.join(lin_tmp, 'libs', 'Dwarf_Fortress')
 lin_bin = nil if not File.file?(lin_bin)
+lin_lib = File.join(lin_tmp, 'libs', 'libgraphics.so')
+lin_lib = nil if not File.file?(lin_lib)
 
 win_tmp = File.join(tmp_path, "df_win_#{version}")
 if win_binary_url and not File.directory?(win_tmp)
@@ -96,9 +98,9 @@ File.open("osx_#{version}_globals.xml", 'w') { |fd| fd.puts osx_globals }
 end
 
 
-if lin_bin and not File.file?("lin_#{version}_vtable.xml")
+if lin_bin and lin_lib and not File.file?("lin_#{version}_vtable.xml")
 puts "lin_vtable"
-lin_vtable = `ruby #{misc_path}/scan_vtable.rb #{lin_bin.shellescape}`
+lin_vtable = `ruby #{misc_path}/scan_vtable.rb #{lin_bin.shellescape} #{lin_lib.shellescape}`
 File.open("lin_#{version}_vtable.xml", 'w') { |fd| fd.puts lin_vtable }
 end
 
