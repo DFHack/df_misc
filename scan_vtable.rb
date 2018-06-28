@@ -25,9 +25,15 @@ int scanptrs32(char *str, int strlen, unsigned __int32 *ptrs, int ptrslen) {
 			p = *(unsigned __int32 *)(str+i);
 			if ((p < ptrs[0]) || (p > ptrs[ptrslen-1]))
 				continue;
-			for (int j=0 ; j<ptrslen ; ++j)
+			for (unsigned min=0, max=ptrslen-1; (max - min) < ptrslen ;) {
+				unsigned j = min + (max - min >> 2);
 				if (p == ptrs[j])
 					return i;
+				if (p > ptrs[j])
+					min = j+1;
+				else
+					max = j-1;
+			}
 		}
 	return -1;
 }
@@ -40,9 +46,15 @@ int scanptrs64(char *str, int strlen, unsigned __int64 *ptrs, int ptrslen) {
 			p = *(unsigned __int64 *)(str+i);
 			if ((p < ptrs[0]) || (p > ptrs[ptrslen-1]))
 				continue;
-			for (int j=0 ; j<ptrslen ; ++j)
+			for (unsigned min=0, max=ptrslen-1; (max - min) < ptrslen ;) {
+				unsigned j = min + (max - min >> 2);
 				if (p == ptrs[j])
 					return i;
+				if (p > ptrs[j])
+					min = j+1;
+				else
+					max = j-1;
+			}
 		}
 	return -1;
 }
