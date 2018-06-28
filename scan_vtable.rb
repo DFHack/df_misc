@@ -129,8 +129,14 @@ else
 	# vtable+4  vfunc1
 	# ...
 	#
-	# typeinfoptr   parent?
+	# typeinfoptr   vptr (base or single inheritance)
 	# typeinfoptr+4 mangled_classname_ptr
+	# typeinfoptr+8 parent
+	#
+	# typeinfoptr   vptr (multiple or private inheritance)
+	# typeinfoptr+4 mangled_classname_ptr
+	# typeinfoptr+8 flag
+	# typeinfoptr+C parent
 
 
 	dasm.pattern_scan(/\d+#{vclass_names_re}\0/) { |addr|
