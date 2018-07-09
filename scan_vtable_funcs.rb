@@ -39,6 +39,7 @@ cls_re = ARGV.shift
 codegenxml = dfhack + '/library/include/df/codegen.out.xml' if dfhack
 dfhack = nil unless dfhack and File.exist?(codegenxml)
 dfbase = df.chomp('.exe') if df
+$ptrsz = 4
 
 abort 'usage: prepare.rb df/df.exe dfhack/' if not df or not dfhack
 
@@ -133,8 +134,8 @@ def dump_vfuncs(dasm, cls, funcs, vt)
 	puts "    <class-type type-name='#{cls.chomp('st')}' original-name='#{cls}'>"
 	puts "        <virtual-methods>"
 	funcs.each_with_index { |faddr, idx|
-		off = idx*4
-		name = ptr_name_off(dasm, vt, off) || "unk_#{off/4}"
+		off = idx*$ptrsz
+		name = ptr_name_off(dasm, vt, off) || "unk_#{off/$ptrsz}"
 		puts "            <vmethod name='#{name}'>"
 		analyse_vfunc(dasm, cls, faddr)
 		puts "            </vmethod>"
@@ -162,6 +163,7 @@ def vtable_funcs_map(df, map, hdr, cls_re)
 	ENV['METASM_NODECODE_RELOCS'] = '1'
 	dasm = Metasm::AutoExe.decode_file(df).disassembler
 	dasm.parse_c_file(hdr)
+	$ptrsz = 8 if dasm.cpu.size == 64
 	if $dump_asm
 		# load ./metasm_prepare output for prettier asm
 		dfrb = df.chomp('.exe') + '.rb'

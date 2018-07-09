@@ -141,8 +141,14 @@ else
 	# vtable+4  vfunc1
 	# ...
 	#
-	# typeinfoptr   parent?
+	# typeinfoptr   vptr (base or single inheritance)
 	# typeinfoptr+4 mangled_classname_ptr
+	# typeinfoptr+8 parent
+	#
+	# typeinfoptr   vptr (multiple or private inheritance)
+	# typeinfoptr+4 mangled_classname_ptr
+	# typeinfoptr+8 flag
+	# typeinfoptr+C parent
 
 
 	dasm.pattern_scan(/\d+#{vclass_names_re}\0/) { |addr|
@@ -235,7 +241,8 @@ vtable.sort.each { |str, vaddrs|
 	if vaddrs.length > 1 and gcc_hint
 		# conflict
 		# it *seems* that gcc layout is <0> <typeinfo_ptr> <vtable ptr0> <vtable ptr1>, so check that 0
-		better = vaddrs.find_all { |va| dasm.decode_dword(va-8) == 0 }
+		offset = $ptrsz == 8 ? 16 : 8
+		better = vaddrs.find_all { |va| dasm.decode_dword(va - offset) == 0 }
 		puts "conflict: original = #{vaddrs.map { |va| '0x%x' % va }.join('|')}, better = #{better.map { |va| '0x%x' % va }.join('|')}" if $VERBOSE
 		vaddrs = better if better.length == 1
 	end
