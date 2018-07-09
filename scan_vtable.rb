@@ -274,3 +274,19 @@ vtable.sort.each { |str, vaddrs|
 		puts "<vtable-address name='#{str}' value='#{'0x%x' % vaddrs[0]}'/>"
 	end
 }
+
+libpath = ARGV.shift
+if not $is_windows and libpath
+	regex = /(_ZTV\d+#{vclass_names_re})\0/
+	offset = $ptrsz*2
+	out = {}
+	File.open(libpath, 'rb') do |f|
+		f.read.scan(regex) do |mangled, name|
+			next if vtable[name]
+			out[name] = mangled
+		end
+	end
+	out.each do |name, mangled|
+		puts "<vtable-address name='#{name}' mangled='#{mangled}' offset='#{offset}'/>"
+	end
+end
