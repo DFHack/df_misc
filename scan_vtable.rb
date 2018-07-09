@@ -280,15 +280,13 @@ if not $is_windows and libpath
 	regex = /(_ZTV\d+#{vclass_names_re})\0/
 	offset = $ptrsz*2
 	out = {}
-	lib_raw = File.open(libpath, 'rb') do |f|
-		f.each_line do |line|
-			line.scan(regex).each do |m|
-				next if vtable[m[1]]
-				out[m[1]] = m[0]
-			end
+	File.open(libpath, 'rb') do |f|
+		f.read.scan(regex) do |mangled, name|
+			next if vtable[name]
+			out[name] = mangled
 		end
 	end
-	out.map do |k,v|
-		puts "<vtable-address name='#{k}' mangled='#{v}' offset='#{offset}'/>"
+	out.each do |name, mangled|
+		puts "<vtable-address name='#{name}' mangled='#{mangled}' offset='#{offset}'/>"
 	end
 end
