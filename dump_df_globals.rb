@@ -8,6 +8,8 @@ require 'metasm'
 dump_fmt = 'xml'
 dump_fmt = 'idc' if ARGV.delete '--idc'
 
+dump_size = ARGV.delete '--size'
+
 Dfhack_names = {
 	"point" => "selection_rect",
 	"menuposition" => "ui_menu_width",
@@ -225,7 +227,9 @@ end
 $stderr.puts "Global table starts at #{Metasm::Expression[table_start]}"
 
 off = table_start + 2*bits/8
-out = []
+
+global = {}
+
 while true
 	ptr_str = dasm.decode_dword(off)
 	off += bits/8
@@ -233,12 +237,27 @@ while true
 	off += bits/8
 	break if ptr_str == 0
 	name = dasm.decode_strz(ptr_str)
-	name = dfhack_names(name) if not dump_raw
-	next if not name
+	global[ptr_var] = name
+end
 
+ptr_prev = 0
+
+out = []
+global.sort.reverse.map do |ptr_var, name|
+	name = dfhack_names(name) if not dump_raw
+	if not name
+			ptr_prev = ptr_var
+			next;
+	end
 	case dump_fmt
 	when 'xml'
-		out << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}'/>"
+		if not dump_size
+			out << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}'/>"
+		else
+			size = ptr_prev > 0 ? (ptr_prev-ptr_var) : 0
+			out << "<global-address name='#{name}' size='0x#{'%08x' % size}'/>"
+			ptr_prev = ptr_var
+		end
 	when 'idc'
 		out << ('MakeName(0x%08X, "%s");' % [ptr_var, '_' + name.gsub(/[^\w]/, '_')])
 	end
