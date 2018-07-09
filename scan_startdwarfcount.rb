@@ -10,7 +10,7 @@ abort 'usage: scan <exe> <sizeof_unitstruct>' if ARGV.length != 2
 ENV['METASM_NODECODE_RELOCS'] = '1'
 
 exe = Metasm::AutoExe.decode_file(ARGV.shift)
-sizeofunit = Integer(ARGV.shift)
+$sizeofunit = Integer(ARGV.shift)
 
 dasm = exe.disassembler
 
@@ -18,13 +18,15 @@ dasm = exe.disassembler
 # in the code, we find the value 7 close to the sizeof(unit), and it is used
 # to load the value used as a loop condition
 
+# function containing this is called from viewscreen_choose_startsitest::feed(), right before viewscreen::addscreen()
+
 # find all 0x00000007 in the binary
 puts 'scan 7' if $VERBOSE
 off_7 = dasm.pattern_scan([7].pack('L'))
 
 # find all 0xsizeofunit in the binary
 puts 'scan sizeof unit' if $VERBOSE
-off_sz = dasm.pattern_scan([sizeofunit].pack('L'))
+off_sz = dasm.pattern_scan([$sizeofunit].pack('L'))
 
 # search close couples
 puts 'proximity scan' if $VERBOSE
@@ -33,6 +35,7 @@ candidates_7 = off_7.find_all { |a7| off_sz.find { |au| au > a7 and au < a7 + 64
 p off_sz, candidates_7 if $DEBUG
 
 def test_candidates(dasm, candidates_7)
+found = 0
 # look for the loop condition thing
 candidates_7.each { |addr_7|
 	# scan for the instruction containing '7' as 2nd argument
@@ -70,28 +73,39 @@ candidates_7.each { |addr_7|
 	#  if the loop test depends on 'store', assume we found it
 	loop_init = dasm.block_at(addr_7_instr)
 
+	sizeofunit_str = Metasm::Expression[$sizeofunit].to_s
 	# take all addresses jumping to the blocks following loop_init
-	endaddrs = loop_init.to_normal.map { |loop_body_addr|
-		dasm.block_at(loop_body_addr).from_normal rescue []
-	}.flatten - [loop_init.list.last.address]
+	endaddrs = loop_init.to_normal.to_a.map { |loop_body_addr|
+		next if not body = dasm.block_at(loop_body_addr)
+		# ensure the loop body references sizeof_unit
+		if not body.list.find { |bdi| bdi.instruction.args.last.to_s == sizeofunit_str }
+			# indirect: may call new_unit() which has a ref to sizeofunit
+			next if body.list.last.instruction.opname != 'call'
+			first_subfunc = body.to_normal.last
+			dasm.disassemble_fast first_subfunc
+			next if not dasm.function_blocks(first_subfunc).keys.find { |fb| dasm.block_at(fb).list.find { |bdi| bdi.instruction.args.last.to_s == sizeofunit_str } }
+		end
+		body.from_normal rescue nil
+	}.flatten.compact - [loop_init.list.last.address]
 
 	# search if the next-to-last instr uses 'store', eg  cmp eax, 0  jnz loop_body
 	ebl = nil
 	if endaddrs.find { |ea|
 		ebl = dasm.block_at(ea)
 		stores.find { |store|
-			ebl.list[-2].instruction.args[0].to_s == store
+			ebl.list.length >= 2 and ebl.list[-2].instruction.args[0].to_s == store
 		}
 	}
 		puts ebl.list[-2, 2] if $VERBOSE
 		puts "fileoff='0x%x'" % dasm.addr_to_fileoff(addr_7) if $VERBOSE
 		puts "<global-address name='start_dwarf_count' value='0x%x'/>" % addr_7
-		break
+		found += 1
 	end
 }
+found
 end
 
-if test_candidates(dasm, candidates_7)
+if test_candidates(dasm, candidates_7) == 0
 	puts 'proximity scan indirect' if $VERBOSE
 	#
 	# look for a code structure like
@@ -114,7 +128,7 @@ if test_candidates(dasm, candidates_7)
 			di = dasm.disassemble_instruction(di_addr)
 			break if not di
 			di_addr += di.bin_length
-			if di.instruction.opname == 'call'
+			if di.instruction.opname == 'call' or di.instruction.opname == 'jmp'
 				call_tg = Metasm::Expression[di.instruction.args.first].reduce
 				if call_tg.kind_of?(::Integer) and off_sz.find { |au|
 					au > call_tg and au < call_tg + 64
