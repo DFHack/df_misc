@@ -208,14 +208,16 @@ sub render_global_class {
 
     local $prefix = $name;
     local @lines;
+    my $vms;
 
     if ($has_rtti) {
-        my $vms = $type->findnodes('child::virtual-methods')->[0];
+        $vms = $type->findnodes('child::virtual-methods')->[0];
         if (!$parent) {
             render_class_vtable($rtti_name, $vms);
         } elsif ($vms) {
             # composite vtable
-            return render_global_class_compositevtable($rtti_name, $type);
+            render_global_class_compositevtable($rtti_name, $type);
+            return if (!$linux);
         }
     }
 
@@ -224,10 +226,16 @@ sub render_global_class {
         push @lines, "  union {";
     }
     indent {
-        if ($parent) {
-            push @lines, "struct $parent super;";
-        } elsif ($has_rtti) {
+        if ($vms || ($has_rtti && !$parent)) {
             push @lines, "struct vtable_$rtti_name *vtable;";
+        }
+        if ($parent) {
+            # GCC: class a { vtable; char; } ; class b:a { char c2; } -> c2 has offset 5 (Windows MSVC: offset 8)
+            if (!$linux) {
+                push @lines, "struct $parent super;";
+            } else {
+                render_struct_parent_fields($type->getAttribute('inherits-from'), $vms, '');
+            }
         }
         render_struct_fields($type);
     };
@@ -236,20 +244,38 @@ sub render_global_class {
         push @lines, "  };";
     }
 
-    # GCC: class a { vtable; char; } ; class b:a { char c2; } -> c2 has offset 5 (Windows MSVC: offset 8)
-    my $magic_attr = '';
-    $magic_attr = ' __attribute__((sizeof_packed))' if ($stdc && $linux && $has_rtti);
-
-    push @lines, "}$magic_attr;\n";
+    push @lines, "};\n";
 
     push @lines_full, @lines;
 }
+
+sub render_struct_parent_fields {
+    my ($name, $vms, $prefix) = @_;
+    $prefix = $prefix.'super_';
+    my $type = $global_types{$name};
+    my $parent = $type->getAttribute('inherits-from');
+    if (!$vms) {
+        my $has_rtti = ($type->getAttribute('ld:meta') eq 'class-type');
+        $vms = $type->findnodes('child::virtual-methods')->[0] if $has_rtti;
+        if ($vms || ($has_rtti && !$parent)) {
+            my $rtti_name = $type->getAttribute('original-name') ||
+                            $type->getAttribute('type-name') ||
+                            $name;
+            push @lines, "struct vtable_$rtti_name *vtable;";
+        }
+    }
+
+    render_struct_parent_fields($parent, $vms, $prefix) if ($parent);
+    render_struct_fields($type, $prefix);
+}
+
 sub render_struct_fields {
-    my ($type) = @_;
+    my ($type, $prefix) = @_;
 
     for my $field ($type->findnodes('child::ld:field')) {
         my $name = $field->getAttribute('name') ||
                    $field->getAttribute('ld:anon-name');
+        $name = $prefix.$name if ($name and $prefix);
         $name = '_' . $name if !$stdc and $name and $name =~ /^(sub|locret|loc|off|seg|asc|byte|word|dword|qword|flt|dbl|tbyte|stru|algn|unk)_|^effects$/;
         render_item($field, $name);
         $lines[$#lines] .= ';';
@@ -319,6 +345,8 @@ sub render_global_class_compositevtable {
         render_class_vtable_fields($vms);
     };
     push @lines, "};";
+
+    return if ($linux);
 
     my @ancestors;
     push @ancestors, $type;
