@@ -43,7 +43,7 @@ def write_symbol(name, addrs)
     if addrs.length == 1
         puts "<global-address name='#{name}' value='0x#{'%08x' % addrs[0]}'/>"
     else
-		puts "<!-- CONFLICT global-address name='#{name}' value='#{addrs.map { |a| '0x%x' % a }.join(' or ')}'/ -->"
+        puts "<!-- CONFLICT global-address name='#{name}' value='#{addrs.map { |a| '0x%x' % a }.join(' or ')}'/ -->"
     end
 end
 
