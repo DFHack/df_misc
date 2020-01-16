@@ -30,6 +30,6 @@ def find_calls(dasm, addr)
     return targets
 end
 
-render_map = find_calls(render)[0]
+render_map = find_calls(dasm, render)[0]
 puts "<global-address name='twbt_render_map' value='0x#{'%08x' % render_map}'/>"
 
