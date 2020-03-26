@@ -204,7 +204,6 @@ public class import_df_structures extends GhidraScript
 		this.dtInt16 = createDataType(dtcStd, "int16_t", AbstractIntegerDataType.getSignedDataType(2, dtm));
 		this.dtInt32 = createDataType(dtcStd, "int32_t", AbstractIntegerDataType.getSignedDataType(4, dtm));
 		this.dtInt64 = createDataType(dtcStd, "int64_t", AbstractIntegerDataType.getSignedDataType(8, dtm));
-		this.dtLong = createDataType(dtcStd, "long", AbstractIntegerDataType.getSignedDataType(currentProgram.getDefaultPointerSize(), dtm));
 		this.dtSizeT = createDataType(dtcStd, "size_t", AbstractIntegerDataType.getUnsignedDataType(currentProgram.getDefaultPointerSize(), dtm));
 		this.dtInt = createDataType(dtcStd, "int", AbstractIntegerDataType.getSignedDataType(4, dtm));
 
@@ -220,6 +219,8 @@ public class import_df_structures extends GhidraScript
 		{
 		case "Executable and Linking Format (ELF)":
 		case "Mac OS X Mach-O":
+			this.dtLong = createDataType(dtcStd, "long", AbstractIntegerDataType.getSignedDataType(currentProgram.getDefaultPointerSize(), dtm));
+
 			var rep = new StructureDataType("_string_rep", 0);
 			rep.setToDefaultAlignment();
 			rep.add(dtSizeT, "_M_length", null);
@@ -255,6 +256,8 @@ public class import_df_structures extends GhidraScript
 
 			break;
 		case "Portable Executable (PE)":
+			this.dtLong = createDataType(dtcStd, "long", AbstractIntegerDataType.getSignedDataType(4, dtm));
+
 			var stringVal = new UnionDataType("_string_val");
 			stringVal.setToDefaultAlignment();
 			stringVal.add(StringDataType.dataType, 16, "_Buf", null);
