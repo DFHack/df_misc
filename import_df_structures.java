@@ -15,6 +15,7 @@ import ghidra.util.task.*;
 
 public class import_df_structures extends GhidraScript
 {
+	private static boolean DEBUG_ENABLED = false;
 	private static final String xmlnsLD = "http://github.com/peterix/dfhack/lowered-data-definition";
 
 	@Override
@@ -35,6 +36,14 @@ public class import_df_structures extends GhidraScript
 	private DataType dtInt, dtLong, dtSizeT;
 	private DataType dtString, dtFStream, dtVectorBool, dtBitArray, dtDeque;
 	private int baseClassPadding;
+
+	private void debugln(String message) throws Exception
+	{
+		if (DEBUG_ENABLED)
+		{
+			println(message);
+		}
+	}
 
 	@Override
 	protected void run() throws Exception
@@ -66,7 +75,14 @@ public class import_df_structures extends GhidraScript
 		monitor.checkCanceled();
 
 		dt = category.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
-		println("created data type " + category.getName() + "::" + dt.getName());
+		debugln("created data type " + category.getName() + "::" + dt.getName());
+
+		// for convenience, make sure pointer types are created
+		var dtp = dtm.getPointer(dt);
+		dtm.addDataType(dtp, DataTypeConflictHandler.KEEP_HANDLER);
+		var dtpp = dtm.getPointer(dtp);
+		dtm.addDataType(dtpp, DataTypeConflictHandler.KEEP_HANDLER);
+
 		return dt;
 	}
 
@@ -80,7 +96,7 @@ public class import_df_structures extends GhidraScript
 			target = DataType.DEFAULT;
 		if (BooleanDataType.dataType.isEquivalent(target))
 			target = dtInt8;
-		var ptr = dtm.getPointer(target, currentProgram.getDefaultPointerSize());
+		var ptr = dtm.getPointer(target);
 		var name = "vector<" + target.getName() + ">";
 
 		var existing = dtcStd.getDataType(name);
@@ -120,9 +136,9 @@ public class import_df_structures extends GhidraScript
 			nodeBase.setToDefaultAlignment();
 			nodeBase = (Structure)createDataType(dtcStd, nodeBase);
 			nodeBase.add(BooleanDataType.dataType, "_M_color", null);
-			nodeBase.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_M_parent", null);
-			nodeBase.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_M_left", null);
-			nodeBase.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_M_right", null);
+			nodeBase.add(dtm.getPointer(node), "_M_parent", null);
+			nodeBase.add(dtm.getPointer(node), "_M_left", null);
+			nodeBase.add(dtm.getPointer(node), "_M_right", null);
 			node.add(nodeBase, "_M_base", null);
 
 			set.add(nodeBase, "_M_header", null);
@@ -131,13 +147,13 @@ public class import_df_structures extends GhidraScript
 		{
 			// MSVC
 
-			node.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_Left", null);
-			node.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_Parent", null);
-			node.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_Right", null);
+			node.add(dtm.getPointer(node), "_Left", null);
+			node.add(dtm.getPointer(node), "_Parent", null);
+			node.add(dtm.getPointer(node), "_Right", null);
 			node.add(BooleanDataType.dataType, "_Color", null);
 			node.add(BooleanDataType.dataType, "_Isnil", null);
 
-			set.add(dtm.getPointer(node, currentProgram.getDefaultPointerSize()), "_Myhead", null);
+			set.add(dtm.getPointer(node), "_Myhead", null);
 		}
 
 		node.add(target, "_M_value_field", null);
@@ -150,7 +166,7 @@ public class import_df_structures extends GhidraScript
 	{
 		if (target == null)
 			target = DataType.DEFAULT;
-		var ptr = dtm.getPointer(target, currentProgram.getDefaultPointerSize());
+		var ptr = dtm.getPointer(target);
 		var name = "DfArray<" + target.getName() + ">";
 
 		var existing = dtc.getDataType(name);
@@ -213,21 +229,21 @@ public class import_df_structures extends GhidraScript
 
 			var dataPlus = new UnionDataType("_string_dataplus");
 			dataPlus.setToDefaultAlignment();
-			dataPlus.add(dtm.getPointer(rep, currentProgram.getDefaultPointerSize()));
-			dataPlus.add(dtm.getPointer(new TerminatedStringDataType(), currentProgram.getDefaultPointerSize()));
+			dataPlus.add(dtm.getPointer(rep));
+			dataPlus.add(dtm.getPointer(new TerminatedStringDataType()));
 			createDataType(dtcStd, dataPlus);
 
 			stringDataType.add(dataPlus, "_M_p", null);
 
 			var biterator = new StructureDataType("_bit_iterator", 0);
 			biterator.setToDefaultAlignment();
-			biterator.add(dtm.getPointer(dtSizeT, currentProgram.getDefaultPointerSize()), "_M_p", null);
+			biterator.add(dtm.getPointer(dtSizeT), "_M_p", null);
 			biterator.add(dtUint32, "_M_offset", null);
 			createDataType(dtcStd, biterator);
 
 			bitVecDataType.add(biterator, "_M_start", null);
 			bitVecDataType.add(biterator, "_M_finish", null);
-			bitVecDataType.add(dtm.getPointer(dtSizeT, currentProgram.getDefaultPointerSize()), "_M_end_of_storage", null);
+			bitVecDataType.add(dtm.getPointer(dtSizeT), "_M_end_of_storage", null);
 
 			fStreamDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
 			fStreamDataType.add(Undefined.getUndefinedDataType(61 * currentProgram.getDefaultPointerSize() + 40));
@@ -242,7 +258,7 @@ public class import_df_structures extends GhidraScript
 			var stringVal = new UnionDataType("_string_val");
 			stringVal.setToDefaultAlignment();
 			stringVal.add(StringDataType.dataType, 16, "_Buf", null);
-			stringVal.add(dtm.getPointer(TerminatedStringDataType.dataType, currentProgram.getDefaultPointerSize()), "_Ptr", null);
+			stringVal.add(dtm.getPointer(TerminatedStringDataType.dataType), "_Ptr", null);
 
 			stringDataType.add(createDataType(dtcStd, stringVal), "_Bx", null);
 			stringDataType.add(dtSizeT, "_Mysize", null);
@@ -1107,18 +1123,18 @@ public class import_df_structures extends GhidraScript
 			break;
 		case "pointer":
 			if (f.item == null)
-				return dtm.getPointer(DataType.DEFAULT, currentProgram.getDefaultPointerSize());
+				return dtm.getPointer(DataType.DEFAULT);
 
 			if ("global".equals(f.item.meta) || "compound".equals(f.item.meta))
 			{
 				/*
 				var t = codegen.typesByName.get(f.item.typeName);
 				if (t != null && t.hasSubClasses)
-					return dtm.getPointer(findOrCreateBaseClassUnion(t), currentProgram.getDefaultPointerSize());
+					return dtm.getPointer(findOrCreateBaseClassUnion(t));
 				*/
 			}
 
-			return dtm.getPointer(getDataType(f.item), currentProgram.getDefaultPointerSize());
+			return dtm.getPointer(getDataType(f.item));
 		case "global":
 		case "compound":
 			if (f.forceEnumSize)
@@ -1216,7 +1232,7 @@ public class import_df_structures extends GhidraScript
 			ft.setReturnType(DataType.VOID);
 
 		var args = new ParameterDefinition[vm.arguments.size() + 1];
-		args[0] = new ParameterDefinitionImpl("this", dtm.getPointer(createDataType(t), currentProgram.getDefaultPointerSize()), null);
+		args[0] = new ParameterDefinitionImpl("this", dtm.getPointer(createDataType(t)), null);
 		for (int i = 0; i < vm.arguments.size(); i++)
 		{
 			var arg = vm.arguments.get(i);
@@ -1258,7 +1274,7 @@ public class import_df_structures extends GhidraScript
 				if (baseClassPadding == 1)
 				{
 					// GCC
-					var mt = dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm), currentProgram.getDefaultPointerSize());
+					var mt = dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm));
 					st.add(mt, mname, null);
 					st.add(mt, mname + "(deleting)", null);
 				}
@@ -1274,17 +1290,17 @@ public class import_df_structures extends GhidraScript
 						arg.name = "deleting";
 						vm.arguments.add(arg);
 					}
-					var mt = dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm), currentProgram.getDefaultPointerSize());
+					var mt = dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm));
 					st.add(mt, mname, null);
 				}
 				continue;
 			}
-			
+
 			if (vm.hasName)
 				mname = vm.name;
 			else if (vm.hasAnonName)
 				mname = name + "_" + vm.anonName;
-			st.add(dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm), currentProgram.getDefaultPointerSize()), mname, null);
+			st.add(dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm)), mname, null);
 		}
 
 		return createDataType(dtcVTables, st);
@@ -1321,7 +1337,7 @@ public class import_df_structures extends GhidraScript
 		if (t.originalName != null)
 			dtc.addDataType(new TypedefDataType(t.typeName, st), DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAlignment();
-		st.add(dtm.getPointer(createVTableDataType(t), currentProgram.getDefaultPointerSize()), "_vtable", null);
+		st.add(dtm.getPointer(createVTableDataType(t)), "_vtable", null);
 
 		addStructFields(st, t);
 
@@ -1356,7 +1372,7 @@ public class import_df_structures extends GhidraScript
 
 	private void labelData(Address addr, DataType dt, String name, int size) throws Exception
 	{
-		println("labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::" + dt.getName() + ") ");
+		debugln("labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::" + dt.getName() + ") ");
 		var listing = currentProgram.getListing();
 		var existing = listing.getData(new AddressSet(new AddressRangeImpl(addr, dt.getLength() == -1 ? size : dt.getLength())), true);
 		for (var e : existing)
@@ -1379,6 +1395,7 @@ public class import_df_structures extends GhidraScript
 		}
 		catch (CodeUnitInsertionException ex)
 		{
+			println("error while labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::" + dt.getName() + ")");
 			printerr(ex.getMessage());
 		}
 		createLabel(addr, name, true, SourceType.IMPORTED);
