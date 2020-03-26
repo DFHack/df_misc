@@ -26,7 +26,7 @@ $is_osx = dasm.program.shortname == 'macho'
 
 def find_string(dasm, str)
     addrs = dasm.pattern_scan(str)
-    abort "Found #{addrs.length} instances of string: #{str.inspect}" if addrs.length != 1
+    raise "Found #{addrs.length} instances of string: #{str.inspect}" if addrs.length != 1
     return addrs[0]
 end
 
