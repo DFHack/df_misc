@@ -290,7 +290,7 @@ public class import_df_structures extends GhidraScript
 		var bitArrayDataType = new StructureDataType("BitArray", 0);
 		bitArrayDataType.setToDefaultAlignment();
 		bitArrayDataType.add(new PointerDataType(new Undefined1DataType()), "ptr", null);
-		bitArrayDataType.add(AbstractIntegerDataType.getUnsignedDataType(currentProgram.getDefaultPointerSize(), dtm), "count", null);
+		bitArrayDataType.add(dtInt, "count", null);
 		this.dtBitArray = createDataType(dtc, bitArrayDataType);
 
 		this.dtcEnums = dtc.createCategory("enums");
@@ -1004,6 +1004,7 @@ public class import_df_structures extends GhidraScript
 					throw new Exception("unnamed typed field " + prefix + f.name);
 				if (f.meta.equals("compound"))
 				{
+					f.ownedType.baseType = f.baseType;
 					if (f.subtype.isEmpty())
 						f.ownedType.meta = "struct-type";
 					else
