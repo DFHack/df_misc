@@ -1114,9 +1114,10 @@ public class import_df_structures extends GhidraScript {
 			return getDataType(f.typeName);
 		case "static-array":
 			if (f.hasCount)
-				return new ArrayDataType(getDataType(f.item), f.count, 0);
+				return createArrayDataType(getDataType(f.item), f.count, f.indexEnum);
 			var enumItems = codegen.typesByName.get(f.indexEnum).enumItems;
-			return new ArrayDataType(getDataType(f.item), enumItems.size() + (int) enumItems.get(0).value, 0);
+			return createArrayDataType(getDataType(f.item), enumItems.size() + (int) enumItems.get(0).value,
+					f.indexEnum);
 		case "bytes":
 			switch (f.subtype) {
 			case "padding":
@@ -1127,6 +1128,44 @@ public class import_df_structures extends GhidraScript {
 			break;
 		}
 		throw new Exception("Unhandled field meta/subtype: " + f.meta + "/" + f.subtype);
+	}
+
+	private DataType createArrayDataType(DataType item, int count, String indexEnumName) throws Exception {
+		if (indexEnumName == null) {
+			return new ArrayDataType(item, count, 0);
+		}
+
+		var indexEnum = codegen.typesByName.get(indexEnumName);
+		if (indexEnum == null) {
+			printerr("missing index-enum type " + indexEnumName);
+			return createArrayDataType(item, count, null);
+		}
+
+		var names = new String[count];
+		long prevValue = -1;
+		for (var ei : indexEnum.enumItems) {
+			long value;
+			if (ei.hasValue) {
+				value = ei.value;
+			} else {
+				value = prevValue + 1;
+			}
+			prevValue = value;
+			if (ei.hasName && value >= 0 && value < names.length) {
+				names[(int) value] = ei.name;
+			}
+		}
+
+		var dt = new StructureDataType(item.getName() + "[<" + indexEnumName + ">" + count + "]", 0);
+		dt.setToDefaultAlignment();
+		for (int i = 0; i < count; i++) {
+			if (names[i] == null) {
+				dt.add(item, indexEnumName + "_anon_" + i, null);
+			} else {
+				dt.add(item, names[i], null);
+			}
+		}
+		return dtc.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
 	}
 
 	private DataType createEnumDataType(TypeDef t) throws Exception {
