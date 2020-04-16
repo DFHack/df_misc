@@ -448,6 +448,13 @@ public class import_df_structures extends GhidraScript {
 		public final List<EnumItem> enumItems = new ArrayList<>();
 		public final List<VMethod> vmethods = new ArrayList<>();
 
+		public String getName() {
+			if (originalName != null) {
+				return originalName;
+			}
+			return typeName;
+		}
+
 		@Override
 		public void setMeta(String meta) {
 			this.meta = meta;
@@ -938,7 +945,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private void findAnonymousTypes(List<TypeDef> toAdd, TypeDef parent) throws Exception {
-		var prefix = parent.typeName + "::";
+		var prefix = parent.getName() + "::";
 		for (var field : parent.fields) {
 			findAnonymousTypes(toAdd, prefix, field);
 		}
@@ -947,7 +954,7 @@ public class import_df_structures extends GhidraScript {
 	private void findAnonymousTypes(List<TypeDef> toAdd, String prefix, TypeDef.Field field) throws Exception {
 		for (var f = field; f != null; f = f.item) {
 			if (f.ownedType != null) {
-				if (f.ownedType.typeName == null)
+				if (f.ownedType.getName() == null)
 					throw new Exception("unnamed typed field " + prefix + f.name);
 				if (f.meta.equals("compound")) {
 					f.ownedType.baseType = f.baseType;
@@ -976,9 +983,9 @@ public class import_df_structures extends GhidraScript {
 	private DataType createDataType(TypeDef t) throws Exception {
 		DataType existing;
 		if (t.meta.equals("enum-type"))
-			existing = dtcEnums.getDataType(t.typeName);
+			existing = dtcEnums.getDataType(t.getName());
 		else
-			existing = dtc.getDataType(t.typeName);
+			existing = dtc.getDataType(t.getName());
 		if (existing != null)
 			return existing;
 
@@ -992,9 +999,9 @@ public class import_df_structures extends GhidraScript {
 		case "class-type":
 			return createClassDataType(t);
 		case "static-array":
-			return createDataType(dtc, t.typeName, getDataType(t.fields.get(0)));
+			return createDataType(dtc, t.getName(), getDataType(t.fields.get(0)));
 		default:
-			throw new Exception("Unhandled type meta for " + t.typeName + ": " + t.meta);
+			throw new Exception("Unhandled type meta for " + t.getName() + ": " + t.meta);
 		}
 	}
 
@@ -1067,13 +1074,6 @@ public class import_df_structures extends GhidraScript {
 			if (f.item == null)
 				return dtm.getPointer(DataType.DEFAULT);
 
-			if ("global".equals(f.item.meta) || "compound".equals(f.item.meta)) {
-				/*
-				 * var t = codegen.typesByName.get(f.item.typeName); if (t != null &&
-				 * t.hasSubClasses) return dtm.getPointer(findOrCreateBaseClassUnion(t));
-				 */
-			}
-
 			return dtm.getPointer(getDataType(f.item));
 		case "global":
 		case "compound":
@@ -1138,7 +1138,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createEnumDataType(TypeDef t) throws Exception {
-		var et = new EnumDataType(t.typeName,
+		var et = new EnumDataType(t.getName(),
 				t.baseType == null || t.baseType.isEmpty() ? 4 : dtcStd.getDataType(t.baseType).getLength());
 
 		long prevValue = -1;
@@ -1169,7 +1169,7 @@ public class import_df_structures extends GhidraScript {
 			int pastAlignment = st.getLength() % this.baseClassPadding;
 			if (pastAlignment != 0) {
 				st.add(new ArrayDataType(Undefined1DataType.dataType, this.baseClassPadding - pastAlignment, 1), null,
-						"base class padding for " + t.typeName);
+						"base class padding for " + t.getName());
 			}
 		}
 
@@ -1179,7 +1179,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createStructDataType(TypeDef t) throws Exception {
-		Composite st = t.isUnion ? new UnionDataType(t.typeName) : new StructureDataType(t.typeName, 0);
+		Composite st = t.isUnion ? new UnionDataType(t.getName()) : new StructureDataType(t.getName(), 0);
 		// add early to avoid recursion
 		st = (Composite) dtc.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAlignment();
@@ -1218,12 +1218,11 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createVTableDataType(TypeDef t) throws Exception {
-		var name = t.originalName != null ? t.originalName : t.typeName;
-		var existing = dtcVTables.getDataType("vtable_" + name);
+		var existing = dtcVTables.getDataType("vtable_" + t.getName());
 		if (existing != null)
 			return existing;
 
-		Structure st = new StructureDataType("vtable_" + name, 0);
+		Structure st = new StructureDataType("vtable_" + t.getName(), 0);
 		// add early to avoid recursion
 		st = (Structure) dtcVTables.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAlignment();
@@ -1235,10 +1234,10 @@ public class import_df_structures extends GhidraScript {
 		for (var vm : t.vmethods) {
 			String mname = null;
 			if (vm.isDestructor) {
-				mname = "~" + name;
+				mname = "~" + t.getName();
 				if (baseClassPadding == 1) {
 					// GCC
-					var mt = dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm));
+					var mt = dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm));
 					st.add(mt, mname, null);
 					st.add(mt, mname + "(deleting)", null);
 				} else {
@@ -1251,7 +1250,7 @@ public class import_df_structures extends GhidraScript {
 						arg.name = "deleting";
 						vm.arguments.add(arg);
 					}
-					var mt = dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm));
+					var mt = dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm));
 					st.add(mt, mname, null);
 				}
 				continue;
@@ -1260,22 +1259,22 @@ public class import_df_structures extends GhidraScript {
 			if (vm.hasName)
 				mname = vm.name;
 			else if (vm.hasAnonName)
-				mname = name + "_" + vm.anonName;
-			st.add(dtm.getPointer(createMethodDataType(name + "::" + mname, t, vm)), mname, null);
+				mname = t.getName() + "_" + vm.anonName;
+			st.add(dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm)), mname, null);
 		}
 
 		return createDataType(dtcVTables, st);
 	}
 
 	private Union findOrCreateBaseClassUnion(TypeDef t) throws Exception {
-		var typeName = "virtual_" + (t.originalName == null ? t.typeName : t.originalName);
+		var typeName = "virtual_" + t.getName();
 		var existing = (Union) dtc.getDataType(typeName);
 		if (existing != null)
 			return existing;
 
 		var ut = new UnionDataType(typeName);
 		dtc.addDataType(ut, DataTypeConflictHandler.REPLACE_HANDLER);
-		ut.add(createDataType(t), t.typeName, null);
+		ut.add(createDataType(t), t.getName(), null);
 		return (Union) createDataType(dtc, ut);
 	}
 
@@ -1289,11 +1288,9 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createClassDataType(TypeDef t) throws Exception {
-		Structure st = new StructureDataType(t.originalName != null ? t.originalName : t.typeName, 0);
+		Structure st = new StructureDataType(t.getName(), 0);
 		// add early to avoid recursion
 		st = (Structure) dtc.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
-		if (t.originalName != null)
-			dtc.addDataType(new TypedefDataType(t.typeName, st), DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAlignment();
 		st.add(dtm.getPointer(createVTableDataType(t)), "_vtable", null);
 
@@ -1303,14 +1300,12 @@ public class import_df_structures extends GhidraScript {
 
 		addToBaseClassUnion(t, st);
 
-		if (t.originalName != null)
-			return createDataType(dtc, t.typeName, st);
 		return st;
 	}
 
 	private DataType createBitfieldDataType(TypeDef t) throws Exception {
 		var bt = t.baseType == null ? dtUint32 : dtcStd.getDataType(t.baseType);
-		var st = new StructureDataType(t.typeName, 0);
+		var st = new StructureDataType(t.getName(), 0);
 		st.setToDefaultAlignment();
 		st.setMinimumAlignment(bt.getLength());
 
@@ -1319,7 +1314,7 @@ public class import_df_structures extends GhidraScript {
 			if (f.hasName)
 				name = f.name;
 			else if (f.hasAnonName)
-				name = t.typeName + "_" + f.anonName;
+				name = t.getName() + "_" + f.anonName;
 			int count = f.hasCount ? f.count : 1;
 			st.addBitField(bt, count, name, null);
 		}
@@ -1449,7 +1444,9 @@ public class import_df_structures extends GhidraScript {
 			if (dt == null)
 				continue;
 
-			var cls = symtab.createClass(ns, vt.name, SourceType.IMPORTED);
+			var cls = (GhidraClass) symtab.getNamespace(vt.name, ns);
+			if (cls == null)
+				cls = symtab.createClass(ns, vt.name, SourceType.IMPORTED);
 
 			long offset = vt.hasOffset ? vt.offset : 0;
 
