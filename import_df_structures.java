@@ -447,6 +447,8 @@ public class import_df_structures extends GhidraScript {
 		public final List<Field> fields = new ArrayList<>();
 		public final List<EnumItem> enumItems = new ArrayList<>();
 		public final List<VMethod> vmethods = new ArrayList<>();
+		private long enumItemsMin = 0;
+		private long enumItemsMax = 0;
 
 		public String getName() {
 			if (originalName != null) {
@@ -473,6 +475,33 @@ public class import_df_structures extends GhidraScript {
 		@Override
 		public List<Field> getFields() {
 			return fields;
+		}
+
+		public int enumRequiredBits() {
+			if (enumItemsMin == 0 && enumItemsMax == 0) {
+				long prevValue = -1;
+				for (var ei : enumItems) {
+					long value;
+					if (ei.hasValue) {
+						value = ei.value;
+					} else {
+						value = prevValue + 1;
+					}
+					prevValue = value;
+					if (enumItemsMin > value) {
+						enumItemsMin = value;
+					}
+					if (enumItemsMax < value) {
+						enumItemsMax = value;
+					}
+				}
+			}
+
+			long requiredBits = Math.max(Long.highestOneBit(-enumItemsMin), Long.highestOneBit(enumItemsMax));
+			if (enumItemsMin < 0 || requiredBits == 0) {
+				requiredBits++;
+			}
+			return (int) requiredBits;
 		}
 	}
 
@@ -981,17 +1010,19 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createDataType(TypeDef t) throws Exception {
-		DataType existing;
-		if (t.meta.equals("enum-type"))
-			existing = dtcEnums.getDataType(t.getName());
-		else
-			existing = dtc.getDataType(t.getName());
+		if (t.meta.equals("enum-type")) {
+			int minSize = t.enumRequiredBits();
+			minSize = (minSize + 7) / 8;
+			for (int size = 8; size >= minSize; size /= 2) {
+				getOrCreateEnumDataType(t, size);
+			}
+			return getOrCreateEnumDataType(t, 0);
+		}
+		var existing = dtc.getDataType(t.getName());
 		if (existing != null)
 			return existing;
 
 		switch (t.meta) {
-		case "enum-type":
-			return createEnumDataType(t);
 		case "bitfield-type":
 			return createBitfieldDataType(t);
 		case "struct-type":
@@ -1003,6 +1034,27 @@ public class import_df_structures extends GhidraScript {
 		default:
 			throw new Exception("Unhandled type meta for " + t.getName() + ": " + t.meta);
 		}
+	}
+
+	private DataType getOrCreateEnumDataType(TypeDef t, int size) throws Exception {
+		var name = t.getName();
+		if (size != 0) {
+			name += "(" + (size * 8) + "-bit)";
+		}
+		var existing = dtcEnums.getDataType(name);
+		if (existing != null) {
+			return existing;
+		}
+
+		if (size == 0) {
+			if (t.baseType == null || t.baseType.isEmpty()) {
+				size = 4;
+			} else {
+				size = dtcStd.getDataType(t.baseType).getLength();
+			}
+		}
+
+		return createEnumDataType(t, name, size);
 	}
 
 	private DataType getDataType(String name) throws Exception {
@@ -1078,7 +1130,8 @@ public class import_df_structures extends GhidraScript {
 		case "global":
 		case "compound":
 			if (f.forceEnumSize) {
-				return dtcStd.getDataType(f.baseType);
+				return getOrCreateEnumDataType(codegen.typesByName.get(f.typeName),
+						dtcStd.getDataType(f.baseType).getLength());
 			}
 			return getDataType(f.typeName);
 		case "static-array":
@@ -1137,15 +1190,14 @@ public class import_df_structures extends GhidraScript {
 		return dtc.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
 	}
 
-	private DataType createEnumDataType(TypeDef t) throws Exception {
-		var et = new EnumDataType(t.getName(),
-				t.baseType == null || t.baseType.isEmpty() ? 4 : dtcStd.getDataType(t.baseType).getLength());
+	private DataType createEnumDataType(TypeDef t, String name, int size) throws Exception {
+		var et = new EnumDataType(name, size);
 
 		long prevValue = -1;
 		for (var ei : t.enumItems) {
 			long value = ei.hasValue ? ei.value : prevValue + 1;
-			String name = ei.hasName ? ei.name : "_unk_" + value;
-			et.add(name, value);
+			String key = ei.hasName ? ei.name : "_unk_" + value;
+			et.add(key, value);
 			prevValue = value;
 		}
 
