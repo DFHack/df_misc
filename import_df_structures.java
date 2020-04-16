@@ -1535,6 +1535,14 @@ public class import_df_structures extends GhidraScript {
 				}
 			}
 		}
+
+		for (var dt : codegen.types) {
+			if ("struct-type".equals(dt.meta) && !dt.getName().contains("::")) {
+				if (symtab.getNamespace(dt.getName(), ns) == null) {
+					symtab.createClass(ns, dt.getName(), SourceType.IMPORTED);
+				}
+			}
+		}
 	}
 
 	private void labelGlobals() throws Exception {
