@@ -99,12 +99,22 @@ public class import_df_structures extends GhidraScript {
 			target = DataType.DEFAULT;
 		if (BooleanDataType.dataType.isEquivalent(target))
 			target = dtInt8;
-		var ptr = dtm.getPointer(target);
 		var name = "vector<" + target.getName() + ">";
 
 		var existing = dtcStd.getDataType(name);
 		if (existing != null)
 			return existing;
+
+		var ptr = dtm.getPointer(target);
+		if (target instanceof Pointer) {
+			var base = ((Pointer) target).getDataType();
+			Structure ptr_wrapper = new StructureDataType("ptr_to_" + base.getName(), 0);
+			ptr_wrapper = (Structure) dtm.getCategory(base.getCategoryPath()).addDataType(ptr_wrapper,
+					DataTypeConflictHandler.REPLACE_HANDLER);
+			ptr_wrapper.setToDefaultAlignment();
+			ptr_wrapper.add(target, "ptr", null);
+			ptr = dtm.getPointer(ptr_wrapper);
+		}
 
 		var vec = new StructureDataType(name, 0);
 		vec.setToDefaultAlignment();
@@ -1155,6 +1165,15 @@ public class import_df_structures extends GhidraScript {
 	private DataType createArrayDataType(DataType item, int count, String indexEnumName) throws Exception {
 		if (indexEnumName == null) {
 			return new ArrayDataType(item, count, 0);
+		}
+
+		if (item instanceof Array) {
+			Structure wrapper = new StructureDataType(item.getName() + "_wrapper", 0);
+			wrapper = (Structure) dtm.getCategory(item.getCategoryPath()).addDataType(wrapper,
+					DataTypeConflictHandler.REPLACE_HANDLER);
+			wrapper.setToDefaultAlignment();
+			wrapper.add(item, "array", null);
+			item = wrapper;
 		}
 
 		var indexEnum = codegen.typesByName.get(indexEnumName);
