@@ -1,57 +1,26 @@
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Stack;
+// Imports df-structures into Ghidra. This script should always be run on a freshly imported executable. Running it multiple times is likely to fail.
+//
+// To make this script less tedious to run, create a file named import_df_structures.properties in the same directory as this script with the following two lines:
+//
+//     Select codegen.out.xml Select=[full path to df-structures]/codegen/codegen.out.xml
+//     Select symbols.xml Select=[full path to df-structures]/symbols.xml
+//
+// (Replace [full path to df-structures] with the actual path, of course.) Doing this will also allow this script to be run in headless mode.
+//
+// @author Ben Lubar
+// @category DFHack
 
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
+import java.io.*;
+import java.util.*;
+
+import javax.xml.stream.*;
 
 import ghidra.app.cmd.function.CreateFunctionCmd;
 import ghidra.app.script.GhidraScript;
-import ghidra.program.model.address.Address;
-import ghidra.program.model.address.AddressRangeImpl;
-import ghidra.program.model.address.AddressSet;
-import ghidra.program.model.data.AbstractIntegerDataType;
-import ghidra.program.model.data.ArrayDataType;
-import ghidra.program.model.data.BooleanDataType;
-import ghidra.program.model.data.Category;
-import ghidra.program.model.data.CategoryPath;
-import ghidra.program.model.data.Composite;
-import ghidra.program.model.data.DataType;
-import ghidra.program.model.data.DataTypeComponent;
-import ghidra.program.model.data.DataTypeConflictHandler;
-import ghidra.program.model.data.DataTypeManager;
-import ghidra.program.model.data.EnumDataType;
-import ghidra.program.model.data.Float4DataType;
-import ghidra.program.model.data.Float8DataType;
-import ghidra.program.model.data.FunctionDefinition;
-import ghidra.program.model.data.FunctionDefinitionDataType;
-import ghidra.program.model.data.GenericCallingConvention;
-import ghidra.program.model.data.ParameterDefinition;
-import ghidra.program.model.data.ParameterDefinitionImpl;
-import ghidra.program.model.data.Pointer;
-import ghidra.program.model.data.PointerDataType;
-import ghidra.program.model.data.StringDataType;
-import ghidra.program.model.data.Structure;
-import ghidra.program.model.data.StructureDataType;
-import ghidra.program.model.data.TerminatedStringDataType;
-import ghidra.program.model.data.TypedefDataType;
-import ghidra.program.model.data.Undefined;
-import ghidra.program.model.data.Undefined1DataType;
-import ghidra.program.model.data.Union;
-import ghidra.program.model.data.UnionDataType;
-import ghidra.program.model.listing.Data;
-import ghidra.program.model.listing.Function;
-import ghidra.program.model.listing.GhidraClass;
-import ghidra.program.model.listing.ParameterImpl;
-import ghidra.program.model.listing.Program;
-import ghidra.program.model.listing.ReturnParameterImpl;
-import ghidra.program.model.listing.Variable;
-import ghidra.program.model.symbol.Namespace;
-import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.address.*;
+import ghidra.program.model.data.*;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.task.TaskMonitor;
 
