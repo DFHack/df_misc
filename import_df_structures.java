@@ -192,18 +192,12 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private void createStdDataTypes() throws Exception {
-		updateProgressMajor("erasing existing data types...");
 		symtab = currentProgram.getSymbolTable();
-		var dfNamespace = symtab.getNamespace("df", currentProgram.getGlobalNamespace());
-		if (dfNamespace != null) {
-			dfNamespace.getSymbol().delete();
-		}
 		dtm = currentProgram.getDataTypeManager();
-		dtm.getRootCategory().removeCategory("df", monitor);
 		dtc = dtm.createCategory(new CategoryPath("/df"));
 
 		updateProgressMajor("creating stdlib types...");
-		dtcStd = dtc.createCategory("std");
+		dtcStd = dtm.getRootCategory().createCategory("std");
 		this.dtUint8 = createDataType(dtcStd, "uint8_t", AbstractIntegerDataType.getUnsignedDataType(1, dtm));
 		this.dtUint16 = createDataType(dtcStd, "uint16_t", AbstractIntegerDataType.getUnsignedDataType(2, dtm));
 		this.dtUint32 = createDataType(dtcStd, "uint32_t", AbstractIntegerDataType.getUnsignedDataType(4, dtm));
@@ -305,6 +299,20 @@ public class import_df_structures extends GhidraScript {
 		this.dtcEnums = dtc.createCategory("enums");
 		this.dtcVTables = dtc.createCategory("vtables");
 		this.dtcVMethods = dtcVTables.createCategory("methods");
+
+		// some types that are created by the demangler
+		var dtcDemangler = dtm.getRootCategory().createCategory("Demangler");
+		createDataType(dtcDemangler, "pstringst", dtString);
+		createDataType(dtcDemangler, "stringvectst", createVectorType(dtString));
+		createDataType(dtcDemangler, "svector", createVectorType(dtm.getPointer(CharDataType.dataType)));
+		var dtcDemanglerStd = dtcDemangler.createCategory("std");
+		createDataType(dtcDemanglerStd, "basic_string", dtString);
+
+		// we don't have interface_key yet because we haven't read the XML yet. make a
+		// fake one.
+		DataType fakeInterfaceKeySet = new StructureDataType("set<interface_key>", 0);
+		fakeInterfaceKeySet = dtcStd.addDataType(fakeInterfaceKeySet, DataTypeConflictHandler.KEEP_HANDLER);
+		createDataType(dtcDemanglerStd, "set", fakeInterfaceKeySet);
 	}
 
 	private void processXMLInputs() throws Exception {
@@ -356,6 +364,12 @@ public class import_df_structures extends GhidraScript {
 
 		@Override
 		public void setName(String name) {
+			if (name.startsWith("in_")) {
+				// in_RegisterName is assumed by a lot of Ghidra scripts to be an automatic
+				// name, so things like in_play get changed to _in_play to avoid having Ghidra
+				// get confused.
+				name = "_" + name;
+			}
 			this.hasName = true;
 			this.name = name;
 		}
