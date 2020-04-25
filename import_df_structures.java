@@ -131,7 +131,7 @@ public class import_df_structures extends GhidraScript {
 
 		var name = "set<" + target.getName() + ">";
 		var existing = dtcStd.getDataType(name);
-		if (existing != null)
+		if (existing != null && !existing.isNotYetDefined())
 			return existing;
 
 		Structure node = new StructureDataType("_Rb_tree_node<" + target.getName() + ">", 0);
