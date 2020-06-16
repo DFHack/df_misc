@@ -43,7 +43,7 @@ public class import_df_structures extends GhidraScript {
 	private DataType dtUint8, dtUint16, dtUint32, dtUint64;
 	private DataType dtInt8, dtInt16, dtInt32, dtInt64;
 	private DataType dtInt, dtLong, dtSizeT;
-	private DataType dtString, dtFStream, dtVectorBool, dtBitArray, dtDeque;
+	private DataType dtString, dtFStream, dtVectorBool, dtDeque;
 	private int baseClassPadding;
 
 	private void debugln(String message) throws Exception {
@@ -289,13 +289,6 @@ public class import_df_structures extends GhidraScript {
 		this.dtString = createDataType(dtcStd, stringDataType);
 		this.dtVectorBool = createDataType(dtcStd, bitVecDataType);
 		this.dtDeque = createDataType(dtcStd, dequeDataType);
-
-		var bitArrayDataType = new StructureDataType("BitArray", 0);
-		bitArrayDataType.setToDefaultAlignment();
-		bitArrayDataType.add(new PointerDataType(new Undefined1DataType()), "ptr", null);
-		bitArrayDataType.add(dtInt, "count", null);
-		this.dtBitArray = createDataType(dtc, bitArrayDataType);
-
 		this.dtcEnums = dtc.createCategory("enums");
 		this.dtcVTables = dtc.createCategory("vtables");
 		this.dtcVMethods = dtcVTables.createCategory("methods");
@@ -818,7 +811,8 @@ public class import_df_structures extends GhidraScript {
 							((IOwnsType) stack.peek()).getOwnedType().inheritsFrom = reader.getAttributeValue(i);
 							break;
 						case "index-enum":
-							((TypeDef.Field) stack.peek()).indexEnum = reader.getAttributeValue(i);
+							if (!(stack.peek() instanceof TypeDef))
+								((TypeDef.Field) stack.peek()).indexEnum = reader.getAttributeValue(i);
 							break;
 						case "instance-vector":
 							// ignore
@@ -1111,7 +1105,7 @@ public class import_df_structures extends GhidraScript {
 						"deque<" + (f.item == null ? DataType.DEFAULT : getDataType(f.item)).getName() + ">", dtDeque),
 						DataTypeConflictHandler.REPLACE_HANDLER);
 			case "df-flagarray":
-				return dtBitArray;
+				return createBitArrayType(f.indexEnum);
 			case "df-array":
 				return createDfArrayType(f.item == null ? null : getDataType(f.item));
 			case "df-linked-list":
@@ -1174,6 +1168,49 @@ public class import_df_structures extends GhidraScript {
 			break;
 		}
 		throw new Exception("Unhandled field meta/subtype: " + f.meta + "/" + f.subtype);
+	}
+
+	private DataType createBitArrayType(String enumName) throws Exception {
+		var name = "BitArray<" + (enumName == null ? "" : enumName) + ">";
+		var dt = dtc.getDataType(name);
+		if (dt != null)
+			return dt;
+
+		DataType bitsType = Undefined1DataType.dataType;
+		if (enumName != null) {
+			Structure bitsStruct = new StructureDataType(name + "_bits", 0);
+			bitsStruct.setToDefaultAlignment();
+			bitsStruct = (Structure) dtc.addDataType(bitsStruct, DataTypeConflictHandler.REPLACE_HANDLER);
+
+			var et = this.codegen.typesByName.get(enumName);
+			et.enumRequiredBits(); // ensure enumItemsMax is set
+			var bytes = (int) et.enumItemsMax / 8 + 1;
+			var byteEnums = new ghidra.program.model.data.Enum[bytes];
+			for (int i = 0; i < bytes; i++) {
+				var byteEnum = new EnumDataType(name + "_bits_" + i, 1);
+				byteEnum.add("none_of_" + enumName, 0);
+				byteEnums[i] = (ghidra.program.model.data.Enum) dtc.addDataType(byteEnum,
+						DataTypeConflictHandler.REPLACE_HANDLER);
+				bitsStruct.add(byteEnums[i], "bits_" + i, null);
+			}
+
+			long prevValue = -1;
+			for (var ei : et.enumItems) {
+				long value = ei.hasValue ? ei.value : (prevValue + 1);
+				var valueName = ei.hasName ? ei.name : ("_unk_" + value);
+				prevValue = value;
+				byteEnums[(int) (value / 8)].add(enumName + "_" + valueName, 1 << (value % 8));
+			}
+
+			bitsType = bitsStruct;
+		}
+
+		var bitArrayDataType = new StructureDataType(name, 0);
+		bitArrayDataType.setToDefaultAlignment();
+		bitArrayDataType.add(dtm.getPointer(bitsType), "ptr", null);
+		bitArrayDataType.add(dtInt, "count", null);
+
+		return createDataType(dtc, bitArrayDataType);
 	}
 
 	private DataType createArrayDataType(DataType item, int count, String indexEnumName) throws Exception {
@@ -1390,21 +1427,55 @@ public class import_df_structures extends GhidraScript {
 
 	private DataType createBitfieldDataType(TypeDef t) throws Exception {
 		var bt = t.baseType == null ? dtUint32 : dtcStd.getDataType(t.baseType);
-		var st = new StructureDataType(t.getName(), 0);
-		st.setToDefaultAlignment();
-		st.setMinimumAlignment(bt.getLength());
 
+		boolean anyComplex = false;
+		for (var f : t.fields) {
+			if (f.hasCount && f.count != 1) {
+				anyComplex = true;
+				break;
+			}
+			if (f.typeName != null) {
+				anyComplex = true;
+				break;
+			}
+		}
+
+		if (anyComplex) {
+			var st = new StructureDataType(t.getName(), 0);
+			st.setToDefaultAlignment();
+			st.setMinimumAlignment(bt.getLength());
+
+			for (var f : t.fields) {
+				String name = null;
+				if (f.hasName)
+					name = f.name;
+				else if (f.hasAnonName)
+					name = t.getName() + "_" + f.anonName;
+				int count = f.hasCount ? f.count : 1;
+				st.addBitField(bt, count, name, null);
+			}
+
+			return createDataType(dtc, st);
+		}
+
+		var et = new EnumDataType(t.getName(), bt.getLength());
+		et.add("none_of_" + t.getName(), 0);
+		long mask = 1;
 		for (var f : t.fields) {
 			String name = null;
 			if (f.hasName)
-				name = f.name;
+				name = t.getName() + "_" + f.name;
 			else if (f.hasAnonName)
 				name = t.getName() + "_" + f.anonName;
-			int count = f.hasCount ? f.count : 1;
-			st.addBitField(bt, count, name, null);
+
+			if (name != null) {
+				et.add(name, mask);
+			}
+
+			mask = mask << 1;
 		}
 
-		return createDataType(dtc, st);
+		return createDataType(dtc, et);
 	}
 
 	private void cleanOverlappingData(Data data) throws Exception {
