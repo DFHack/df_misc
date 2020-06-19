@@ -16,7 +16,10 @@ import java.util.*;
 import javax.xml.stream.*;
 
 import ghidra.app.cmd.function.CreateFunctionCmd;
+import ghidra.app.cmd.label.DemanglerCmd;
 import ghidra.app.script.GhidraScript;
+import ghidra.app.util.demangler.Demangled;
+import ghidra.framework.model.DomainFolder;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
@@ -65,6 +68,7 @@ public class import_df_structures extends GhidraScript {
 		createDataTypes();
 		labelVTables();
 		labelGlobals();
+		cleanUpDemangler();
 	}
 
 	private void updateProgressMajor(String message) throws Exception {
@@ -528,7 +532,7 @@ public class import_df_structures extends GhidraScript {
 		public SymbolTable findTable(Program currentProgram) throws Exception {
 			long actualTS = 0;
 			if (currentProgram.getExecutableFormat().equals("Portable Executable (PE)")) {
-				// TODO: is there a *good* way to do this with Ghida APIs?
+				// TODO: is there a *good* way to do this with Ghidra APIs?
 				var dosHeader = currentProgram.getListing().getDataAt(currentProgram.getImageBase());
 				var dosHeaderType = (Structure) dosHeader.getBaseDataType();
 				DataTypeComponent ntHeaderOffsetField = null;
@@ -1308,9 +1312,6 @@ public class import_df_structures extends GhidraScript {
 
 		addStructFields(st, t);
 
-		if (t.originalName != null)
-			throw new Exception("original name");
-
 		return createDataType(dtc, st);
 	}
 
@@ -1513,10 +1514,12 @@ public class import_df_structures extends GhidraScript {
 				cleanOverlappingData(prev);
 			}
 		}
-		var existing = listing.getData(
-				new AddressSet(new AddressRangeImpl(addr, dt.getLength() == -1 ? size : dt.getLength())), true);
-		for (var e : existing) {
-			cleanOverlappingData(e);
+		if (false) {
+			var existing = listing.getData(
+					new AddressSet(new AddressRangeImpl(addr, dt.getLength() == -1 ? size : dt.getLength())), true);
+			for (var e : existing) {
+				cleanOverlappingData(e);
+			}
 		}
 
 		try {
@@ -1659,6 +1662,142 @@ public class import_df_structures extends GhidraScript {
 				throw new Exception("missing data type for global " + gobj.name);
 
 			labelData(addrs.get(gobj.name), dt, gobj.name, gobj.item.size);
+		}
+	}
+
+	private void cleanUpDemangler() throws Exception {
+		var em = currentProgram.getExternalManager();
+
+		// ensure external libraries are attached to files
+		for (var libName : em.getExternalLibraryNames()) {
+			if (em.getExternalLibraryPath(libName) == null) {
+				if (libName.equals("libgraphics.so")) {
+					var libGraphicsFile = currentProgram.getDomainFile().getParent().getFile(libName);
+					if (libGraphicsFile != null) {
+						println("attaching libgraphics.so external location");
+						em.setExternalPath(libName, libGraphicsFile.getPathname(), false);
+					} else {
+						printerr("could not find libgraphics.so in the same folder as this program!");
+					}
+				} else if (!libName.equals("<EXTERNAL>")) {
+					var locations = new ArrayList<String>();
+					findLibrary(locations, libName, getProjectRootFolder());
+					if (locations.size() == 1) {
+						println("attaching " + libName + " external location");
+						em.setExternalPath(libName, locations.get(0), false);
+					} else if (locations.isEmpty()) {
+						printerr("missing external location for " + libName);
+					} else {
+						printerr("multiple possible external libraries for " + libName + ":");
+						for (var loc : locations) {
+							printerr("\t" + loc);
+						}
+					}
+				}
+			}
+		}
+
+		// fix up classes
+		for (var libName : em.getExternalLibraryNames()) {
+			var lib = em.getExternalLibrary(libName);
+			for (var sym : symtab.getChildren(lib.getSymbol())) {
+				var cmd = new DemanglerCmd(sym.getAddress(), sym.getName());
+				runCommand(cmd);
+				var demangled = cmd.getDemangledObject();
+				if (demangled == null) {
+					continue;
+				}
+				var ns = ensureDemangledClass(demangled.getNamespace(), lib);
+				if (ns.getSymbol().getSymbolType() == SymbolType.LIBRARY && !sym.getName().startsWith("operator.")
+						&& !Character.isUpperCase(sym.getName().charAt(0)) && !sym.getName().equals("itoa")) {
+					var dfns = symtab.getNamespace("df", ns);
+					if (dfns == null) {
+						dfns = symtab.createNameSpace(ns, "df", SourceType.IMPORTED);
+					}
+					ns = dfns;
+				}
+				if (ns.getSymbol().getSymbolType() == SymbolType.CLASS
+						&& ns.getParentNamespace().getSymbol().getSymbolType() == SymbolType.LIBRARY) {
+					println(ns.getName());
+				}
+				sym.setNamespace(ns);
+				if (sym.getName().equals("basic_string")) {
+					sym.setName("string", SourceType.IMPORTED);
+				} else if (sym.getName().equals("~basic_string")) {
+					sym.setName("~string", SourceType.IMPORTED);
+				}
+				if (sym.getSymbolType() == SymbolType.FUNCTION) {
+					var func = (Function) sym.getObject();
+					if (ns instanceof GhidraClass)
+						func.setCallingConvention("__thiscall");
+					else
+						func.setCallingConvention("__stdcall");
+				}
+			}
+		}
+	}
+
+	private Namespace ensureDemangledClass(Demangled namespace, Library lib) throws Exception {
+		if (namespace == null) {
+			return lib;
+		}
+		var parent = ensureDemangledClass(namespace.getNamespace(), lib);
+		var name = namespace.getName();
+		if (parent.getSymbol().getSymbolType() == SymbolType.LIBRARY && (name.endsWith("st")
+				|| name.startsWith("renderer_") || name.equals("textures") || name.equals("KeybindingScreen"))) {
+			var dfns = symtab.getNamespace("df", parent);
+			if (dfns == null) {
+				dfns = symtab.createNameSpace(parent, "df", SourceType.IMPORTED);
+			}
+			parent = dfns;
+		}
+		// special case: these are in the STL
+		if (name.equals("std") || name.startsWith("__cxx")) {
+			var ns = symtab.getNamespace(namespace.getName(), lib);
+			if (ns == null) {
+				ns = symtab.createNameSpace(parent, namespace.getName(), SourceType.IMPORTED);
+			}
+			return ns;
+		}
+		if (name.equals("_Rep") && parent.getName().equals(lib.getName() + "::std::string")) {
+			parent = parent.getParentNamespace();
+			name = "_string_rep";
+		}
+		if (name.startsWith("basic_string<char") || name.equals("basic_string")) {
+			name = "string";
+		}
+		if (name.startsWith("basic_fstream<char") || name.equals("basic_fstream")) {
+			name = "fstream";
+		}
+		var cls = symtab.getNamespace(name, parent);
+		if (cls == null) {
+			return symtab.createClass(parent, name, SourceType.IMPORTED);
+		}
+		if (cls instanceof GhidraClass) {
+			return cls;
+		}
+		// we need to move the contents of this namespace to the actual class
+		cls.getSymbol().setName(name + "__CLASS", SourceType.USER_DEFINED);
+		var realClass = symtab.createClass(parent, name, SourceType.IMPORTED);
+		for (var child : symtab.getChildren(cls.getSymbol())) {
+			child.setNamespace(realClass);
+		}
+		cls.getSymbol().delete();
+		return realClass;
+	}
+
+	private void findLibrary(List<String> locations, String name, DomainFolder folder) {
+		var file = folder.getFile(name);
+		if (file != null) {
+			var md = file.getMetadata();
+			if (md.get("Executable Format").equals(currentProgram.getExecutableFormat())
+					&& md.get("Address Size").equals(Integer.toString(currentProgram.getDefaultPointerSize() * 8))) {
+				locations.add(file.getPathname());
+			}
+		}
+
+		for (var sub : folder.getFolders()) {
+			findLibrary(locations, name, sub);
 		}
 	}
 }
