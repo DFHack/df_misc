@@ -3,6 +3,8 @@
 //@author Ben Lubar
 //@category DFHack
 
+import java.util.TreeMap;
+
 import ghidra.app.decompiler.*;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
@@ -57,7 +59,12 @@ public class define_df_type_allocate_function extends GhidraScript {
 			return;
 		}
 
+		result.getHighParamID().storeParametersToDatabase(true, SourceType.ANALYSIS);
+
 		boolean createdTypeVar = false;
+		var todo = new TreeMap<Integer, Address>();
+		ghidra.program.model.data.Enum typeType = null;
+		String prefix = null;
 
 		var numOuts = start.getOutSize();
 		for (var i = 0; i < numOuts; i++) {
@@ -93,6 +100,11 @@ public class define_df_type_allocate_function extends GhidraScript {
 				continue;
 			}
 
+			if (vtable == null) {
+				todo.put(i, alloc);
+				continue;
+			}
+
 			var sym = symtab.getPrimarySymbol(addrSpace.getAddress(vtable.getOffset()));
 			var symName = sym != null ? sym.getName() : null;
 			if (symName.startsWith("vtable_")) {
@@ -102,7 +114,6 @@ public class define_df_type_allocate_function extends GhidraScript {
 					svtdt = (Structure) svtdt.getComponent(0).getDataType();
 				}
 				var dt = dtc.getDataType(symName.substring("vtable_".length()));
-				ghidra.program.model.data.Enum typeType = null;
 				for (var comp : svtdt.getComponents()) {
 					if (comp.getFieldName().equals("getType")) {
 						var gtfp = (Pointer) comp.getDataType();
@@ -113,24 +124,40 @@ public class define_df_type_allocate_function extends GhidraScript {
 
 				if (!createdTypeVar) {
 					if (branchind.getHigh() instanceof HighParam) {
-						var typeParam = new ParameterImpl("type", typeType, branchind.getAddress(), currentProgram,
-								SourceType.USER_DEFINED);
-						func.replaceParameters(Function.FunctionUpdateType.CUSTOM_STORAGE, false,
-								SourceType.USER_DEFINED, typeParam);
+						result.getHighParamID().setDataType(branchind, typeType);
+						result.getHighParamID().storeParametersToDatabase(true, SourceType.ANALYSIS);
 					} else {
 						var typeVar = new LocalVariableImpl("type", typeType, (int) branchind.getOffset(),
 								currentProgram);
 						func.addLocalVariable(typeVar, SourceType.USER_DEFINED);
 					}
+					prefix = svtdt.getName().substring("vtable_".length());
+					prefix = prefix.substring(0, prefix.length() - 2) + "_";
 					func.setReturnType(dtm.getPointer(dtc.getDataType(svtdt.getName().substring("vtable_".length()))),
 							SourceType.USER_DEFINED);
 					createdTypeVar = true;
 				}
 
-				var branchVar = new LocalVariableImpl(typeType.getName(i).toLowerCase(),
-						(int) alloc.subtract(func.getEntryPoint()), dtm.getPointer(dt), retReg, currentProgram);
+				var branchName = typeType.getName(i);
+				if (branchName == null)
+					branchName = "unk_" + i;
+				else
+					branchName = branchName.toLowerCase();
+				var branchVar = new LocalVariableImpl(branchName, (int) alloc.subtract(func.getEntryPoint()),
+						dtm.getPointer(dt), retReg, currentProgram);
 				func.addLocalVariable(branchVar, SourceType.USER_DEFINED);
 			}
+		}
+
+		for (var t : todo.entrySet()) {
+			var branchName = typeType.getName(t.getKey());
+			if (branchName == null)
+				branchName = "unk_" + t.getKey();
+			else
+				branchName = branchName.toLowerCase();
+			var branchVar = new LocalVariableImpl(branchName, (int) t.getValue().subtract(func.getEntryPoint()),
+					dtm.getPointer(dtc.getDataType(prefix + branchName + "st")), retReg, currentProgram);
+			func.addLocalVariable(branchVar, SourceType.USER_DEFINED);
 		}
 
 		end(true);
@@ -139,6 +166,7 @@ public class define_df_type_allocate_function extends GhidraScript {
 	private DecompileResults decompileFunc(Function func) throws Exception {
 		var decompiler = new DecompInterface();
 		try {
+			decompiler.toggleParamMeasures(true);
 			decompiler.openProgram(currentProgram);
 			return decompiler.decompileFunction(func, 3600, monitor);
 		} finally {
