@@ -1,4 +1,4 @@
-// Imports df-structures into Ghidra. This script should always be run on a freshly imported executable. Running it multiple times is likely to fail.
+// Imports df-structures into Ghidra. This script should always be run on a freshly imported executable. Running it multiple times is likely to fail. For best results, run this script immediately after answering "no" to the prompt that asks if you want to analyze the executable.
 //
 // To make this script less tedious to run, create a file named import_df_structures.properties in the same directory as this script with the following two lines:
 //
@@ -17,10 +17,12 @@ import javax.xml.stream.*;
 
 import ghidra.app.cmd.function.CreateFunctionCmd;
 import ghidra.app.cmd.label.DemanglerCmd;
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
 import ghidra.app.script.GhidraScript;
+import ghidra.app.services.AnalysisPriority;
 import ghidra.app.util.demangler.Demangled;
 import ghidra.framework.model.DomainFolder;
-import ghidra.program.model.address.*;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.symbol.*;
@@ -69,6 +71,14 @@ public class import_df_structures extends GhidraScript {
 		labelVTables();
 		labelGlobals();
 		cleanUpDemangler();
+
+		updateProgressMajor("Waiting for auto analysis...");
+		var am = AutoAnalysisManager.getAnalysisManager(currentProgram);
+		am.setIgnoreChanges(false); // change from SUSPENDED to ENABLED mode
+		am.reAnalyzeAll(null); // force full program analysis
+		am.waitForAnalysis(AnalysisPriority.CODE_ANALYSIS.priority(), monitor);
+
+		setThunkNamespaces();
 	}
 
 	private void updateProgressMajor(String message) throws Exception {
@@ -300,7 +310,7 @@ public class import_df_structures extends GhidraScript {
 		// some types that are created by the demangler
 		var dtcDemangler = dtm.getRootCategory().createCategory("Demangler");
 		createDataType(dtcDemangler, "pstringst", dtString);
-		createDataType(dtcDemangler, "stringvectst", createVectorType(dtString));
+		createDataType(dtcDemangler, "stringvectst", createVectorType(dtm.getPointer(dtString)));
 		createDataType(dtcDemangler, "svector", createVectorType(dtm.getPointer(CharDataType.dataType)));
 		var dtcDemanglerStd = dtcDemangler.createCategory("std");
 		createDataType(dtcDemanglerStd, "basic_string", dtString);
@@ -1514,13 +1524,6 @@ public class import_df_structures extends GhidraScript {
 				cleanOverlappingData(prev);
 			}
 		}
-		if (false) {
-			var existing = listing.getData(
-					new AddressSet(new AddressRangeImpl(addr, dt.getLength() == -1 ? size : dt.getLength())), true);
-			for (var e : existing) {
-				cleanOverlappingData(e);
-			}
-		}
 
 		try {
 			listing.createData(addr, dt, size);
@@ -1668,6 +1671,17 @@ public class import_df_structures extends GhidraScript {
 	private void cleanUpDemangler() throws Exception {
 		var em = currentProgram.getExternalManager();
 
+		ensureExternalLibraries(em);
+
+		fixupDemangledNames(currentProgram.getGlobalNamespace());
+
+		for (var libName : em.getExternalLibraryNames()) {
+			var lib = em.getExternalLibrary(libName);
+			fixupDemangledNames(lib);
+		}
+	}
+
+	private void ensureExternalLibraries(ExternalManager em) throws Exception {
 		// ensure external libraries are attached to files
 		for (var libName : em.getExternalLibraryNames()) {
 			if (em.getExternalLibraryPath(libName) == null) {
@@ -1679,7 +1693,7 @@ public class import_df_structures extends GhidraScript {
 					} else {
 						printerr("could not find libgraphics.so in the same folder as this program!");
 					}
-				} else if (!libName.equals("<EXTERNAL>")) {
+				} else if (!libName.equals(Library.UNKNOWN)) {
 					var locations = new ArrayList<String>();
 					findLibrary(locations, libName, getProjectRootFolder());
 					if (locations.size() == 1) {
@@ -1696,54 +1710,54 @@ public class import_df_structures extends GhidraScript {
 				}
 			}
 		}
+	}
 
-		// fix up classes
-		for (var libName : em.getExternalLibraryNames()) {
-			var lib = em.getExternalLibrary(libName);
-			for (var sym : symtab.getChildren(lib.getSymbol())) {
-				var cmd = new DemanglerCmd(sym.getAddress(), sym.getName());
-				runCommand(cmd);
-				var demangled = cmd.getDemangledObject();
-				if (demangled == null) {
-					continue;
+	private void fixupDemangledNames(Namespace global) throws Exception {
+		for (var sym : symtab.getChildren(global.getSymbol())) {
+			var cmd = new DemanglerCmd(sym.getAddress(), sym.getName());
+			runCommand(cmd);
+			var demangled = cmd.getDemangledObject();
+			if (demangled == null || !sym.checkIsValid()) {
+				continue;
+			}
+			var ns = ensureDemangledClass(demangled.getNamespace(), global);
+			if (ns.getSymbol().getSymbolType() == global.getSymbol().getSymbolType()
+					&& !sym.getName().startsWith("operator.") && !Character.isUpperCase(sym.getName().charAt(0))
+					&& !sym.getName().equals("itoa")) {
+				var dfns = symtab.getNamespace("df", ns);
+				if (dfns == null) {
+					dfns = symtab.createNameSpace(ns, "df", SourceType.IMPORTED);
 				}
-				var ns = ensureDemangledClass(demangled.getNamespace(), lib);
-				if (ns.getSymbol().getSymbolType() == SymbolType.LIBRARY && !sym.getName().startsWith("operator.")
-						&& !Character.isUpperCase(sym.getName().charAt(0)) && !sym.getName().equals("itoa")) {
-					var dfns = symtab.getNamespace("df", ns);
-					if (dfns == null) {
-						dfns = symtab.createNameSpace(ns, "df", SourceType.IMPORTED);
-					}
-					ns = dfns;
-				}
-				if (ns.getSymbol().getSymbolType() == SymbolType.CLASS
-						&& ns.getParentNamespace().getSymbol().getSymbolType() == SymbolType.LIBRARY) {
-					println(ns.getName());
-				}
-				sym.setNamespace(ns);
-				if (sym.getName().equals("basic_string")) {
-					sym.setName("string", SourceType.IMPORTED);
-				} else if (sym.getName().equals("~basic_string")) {
-					sym.setName("~string", SourceType.IMPORTED);
-				}
-				if (sym.getSymbolType() == SymbolType.FUNCTION) {
-					var func = (Function) sym.getObject();
-					if (ns instanceof GhidraClass)
-						func.setCallingConvention("__thiscall");
-					else
-						func.setCallingConvention("__stdcall");
-				}
+				ns = dfns;
+			}
+			if (ns.getSymbol().getSymbolType() == SymbolType.CLASS
+					&& ns.getParentNamespace().getSymbol().getSymbolType() == SymbolType.LIBRARY) {
+				println(ns.getName());
+			}
+			sym.setNamespace(ns);
+			if (sym.getName().equals("basic_string")) {
+				sym.setName("string", SourceType.IMPORTED);
+			} else if (sym.getName().equals("~basic_string")) {
+				sym.setName("~string", SourceType.IMPORTED);
+			}
+			if (sym.getSymbolType() == SymbolType.FUNCTION) {
+				var func = (Function) sym.getObject();
+				if (ns instanceof GhidraClass
+						&& (!sym.getName().equals("create") || !ns.getName().equals("viewscreen_movieplayerst")))
+					func.setCallingConvention("__thiscall");
+				else
+					func.setCallingConvention("__stdcall");
 			}
 		}
 	}
 
-	private Namespace ensureDemangledClass(Demangled namespace, Library lib) throws Exception {
+	private Namespace ensureDemangledClass(Demangled namespace, Namespace global) throws Exception {
 		if (namespace == null) {
-			return lib;
+			return global;
 		}
-		var parent = ensureDemangledClass(namespace.getNamespace(), lib);
+		var parent = ensureDemangledClass(namespace.getNamespace(), global);
 		var name = namespace.getName();
-		if (parent.getSymbol().getSymbolType() == SymbolType.LIBRARY && (name.endsWith("st")
+		if (parent.getSymbol().getSymbolType() == global.getSymbol().getSymbolType() && (name.endsWith("st")
 				|| name.startsWith("renderer_") || name.equals("textures") || name.equals("KeybindingScreen"))) {
 			var dfns = symtab.getNamespace("df", parent);
 			if (dfns == null) {
@@ -1753,13 +1767,15 @@ public class import_df_structures extends GhidraScript {
 		}
 		// special case: these are in the STL
 		if (name.equals("std") || name.startsWith("__cxx")) {
-			var ns = symtab.getNamespace(namespace.getName(), lib);
+			var ns = symtab.getNamespace(namespace.getName(), global);
 			if (ns == null) {
 				ns = symtab.createNameSpace(parent, namespace.getName(), SourceType.IMPORTED);
 			}
 			return ns;
 		}
-		if (name.equals("_Rep") && parent.getName().equals(lib.getName() + "::std::string")) {
+		if (name.equals("_Rep") && parent.getName().equals("string") && parent.getParentNamespace() != null
+				&& parent.getParentNamespace().getName().equals("std")
+				&& parent.getParentNamespace().getParentNamespace() == global) {
 			parent = parent.getParentNamespace();
 			name = "_string_rep";
 		}
@@ -1784,6 +1800,53 @@ public class import_df_structures extends GhidraScript {
 		}
 		cls.getSymbol().delete();
 		return realClass;
+	}
+
+	private void setThunkNamespaces() throws Exception {
+		updateProgressMajor("Fixing up thunk namespaces...");
+		for (var fn : currentProgram.getFunctionManager().getFunctions(true)) {
+			if (!fn.isThunk()) {
+				continue;
+			}
+
+			var thunked = fn.getThunkedFunction(true);
+			var root = fn.getParentNamespace();
+			while (root.getSymbol().getSymbolType() != SymbolType.GLOBAL
+					&& root.getSymbol().getSymbolType() != SymbolType.LIBRARY) {
+				root = root.getParentNamespace();
+			}
+			var parent = buildMatchingNamespaceChain(root, thunked.getParentNamespace());
+			fn.setParentNamespace(parent);
+		}
+	}
+
+	private Namespace buildMatchingNamespaceChain(Namespace root, Namespace target) throws Exception {
+		if (target.getSymbol().getSymbolType() == SymbolType.GLOBAL
+				|| target.getSymbol().getSymbolType() == SymbolType.LIBRARY) {
+			return root;
+		}
+		var parent = buildMatchingNamespaceChain(root, target.getParentNamespace());
+		var ns = symtab.getNamespace(target.getName(), parent);
+		if (target.getSymbol().getSymbolType() == SymbolType.CLASS) {
+			if (ns == null) {
+				return symtab.createClass(parent, target.getName(), SourceType.IMPORTED);
+			}
+			if (!(ns instanceof GhidraClass)) {
+				throw new Exception("expected " + ns.getName(true) + " to be a class to match " + target.getName(true));
+			}
+			return ns;
+		}
+		if (target.getSymbol().getSymbolType() == SymbolType.NAMESPACE) {
+			if (ns == null) {
+				return symtab.createNameSpace(parent, target.getName(), SourceType.IMPORTED);
+			}
+			if (ns instanceof GhidraClass) {
+				throw new Exception(
+						"expected " + ns.getName(true) + " to be a namespace to match " + target.getName(true));
+			}
+			return ns;
+		}
+		throw new Exception("unexpected symbol type: " + target.getSymbol().getSymbolType());
 	}
 
 	private void findLibrary(List<String> locations, String name, DomainFolder folder) {
