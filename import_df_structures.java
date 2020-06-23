@@ -25,12 +25,14 @@ import ghidra.framework.model.DomainFolder;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
+import ghidra.program.model.mem.MemoryBufferImpl;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
+import ghidra.util.SystemUtilities;
 import ghidra.util.task.TaskMonitor;
 
 public class import_df_structures extends GhidraScript {
-	private static boolean DEBUG_ENABLED = false;
+	private static boolean DEBUG_ENABLED = !SystemUtilities.isInReleaseMode();
 	private static final String xmlnsLD = "http://github.com/peterix/dfhack/lowered-data-definition";
 
 	@Override
@@ -70,6 +72,7 @@ public class import_df_structures extends GhidraScript {
 		createDataTypes();
 		labelVTables();
 		labelGlobals();
+		annotateGlobalTable();
 		cleanUpDemangler();
 
 		updateProgressMajor("Waiting for auto analysis...");
@@ -1513,7 +1516,7 @@ public class import_df_structures extends GhidraScript {
 		}
 	}
 
-	private void labelData(Address addr, DataType dt, String name, int size) throws Exception {
+	private Data labelData(Address addr, DataType dt, String name, int size) throws Exception {
 		debugln("labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::" + dt.getName()
 				+ ") ");
 		var listing = currentProgram.getListing();
@@ -1525,14 +1528,17 @@ public class import_df_structures extends GhidraScript {
 			}
 		}
 
+		Data data = null;
 		try {
-			listing.createData(addr, dt, size);
+			data = listing.createData(addr, dt, size);
 		} catch (CodeUnitInsertionException ex) {
 			println("error while labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::"
 					+ dt.getName() + ")");
 			printerr(ex.getMessage());
 		}
 		createLabel(addr, name, true, SourceType.IMPORTED);
+
+		return data;
 	}
 
 	private void labelVMethods(Address addr, GhidraClass cls, Structure st) throws Exception {
@@ -1668,6 +1674,69 @@ public class import_df_structures extends GhidraScript {
 		}
 	}
 
+	private void annotateGlobalTable() throws Exception {
+		updateProgressMajor("Annotating global table...");
+
+		var stringPointer = dtm.getPointer(TerminatedStringDataType.dataType);
+		var voidPointer = dtm.getPointer(DataType.VOID);
+		Structure globalTableEntryType = new StructureDataType("global_variable_table_entry", 0);
+
+		globalTableEntryType.setToDefaultAlignment();
+		globalTableEntryType.add(stringPointer, "name", "");
+		globalTableEntryType.add(voidPointer, "addr", "");
+		globalTableEntryType = (Structure) dtc.addDataType(globalTableEntryType,
+				DataTypeConflictHandler.REPLACE_HANDLER);
+
+		Structure globalTableType = new StructureDataType("global_variable_table", 0);
+		globalTableType.setToDefaultAlignment();
+		byte[] magic;
+		globalTableType.add(DWordDataType.dataType, "magic1", "12345678h");
+		if (currentProgram.getDefaultPointerSize() == 4) {
+			globalTableType.add(DWordDataType.dataType, "magic2", "87654321h");
+			magic = new byte[] { 0x78, 0x56, 0x34, 0x12, 0x21, 0x43, 0x65, (byte) 0x87 };
+		} else {
+			globalTableType.add(DWordDataType.dataType, "magic2", "12345678h");
+			globalTableType.add(DWordDataType.dataType, "magic3", "87654321h");
+			globalTableType.add(DWordDataType.dataType, "magic4", "87654321h");
+			magic = new byte[] { 0x78, 0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12, 0x21, 0x43, 0x65, (byte) 0x87, 0x21,
+					0x43, 0x65, (byte) 0x87 };
+		}
+		globalTableType = (Structure) dtc.addDataType(globalTableType, DataTypeConflictHandler.REPLACE_HANDLER);
+
+		var mem = currentProgram.getMemory();
+		var start = mem.findBytes(mem.getMinAddress(), magic, null, true, monitor);
+		var addr = start;
+		while (true) {
+			monitor.checkCanceled();
+			addr = addr.addNoWrap(globalTableEntryType.getLength());
+			long nameAddr = mem.getLong(addr);
+			long dataAddr;
+			if (currentProgram.getDefaultPointerSize() == 4) {
+				dataAddr = nameAddr >>> 32;
+				nameAddr = nameAddr & 0xffffffff;
+			} else {
+				dataAddr = mem.getLong(addr.addNoWrap(8));
+			}
+
+			if (nameAddr == 0) {
+				break;
+			}
+
+			var buf = new MemoryBufferImpl(mem, toAddr(nameAddr));
+			var nameLength = TerminatedStringDataType.dataType.getLength(buf, -1);
+			var name = (String) TerminatedStringDataType.dataType.getValue(buf, null, nameLength);
+			var data = toAddr(dataAddr);
+			if (!symtab.hasSymbol(data)) {
+				createLabel(data, name, false, SourceType.IMPORTED);
+			}
+		}
+
+		globalTableType.add(new ArrayDataType(globalTableEntryType,
+				(int) addr.subtract(start) / globalTableEntryType.getLength(), -1), "entries", "");
+
+		labelData(start, globalTableType, "global_table", -1);
+	}
+
 	private void cleanUpDemangler() throws Exception {
 		var em = currentProgram.getExternalManager();
 
@@ -1714,11 +1783,20 @@ public class import_df_structures extends GhidraScript {
 
 	private void fixupDemangledNames(Namespace global) throws Exception {
 		for (var sym : symtab.getChildren(global.getSymbol())) {
-			var cmd = new DemanglerCmd(sym.getAddress(), sym.getName());
+			var addr = sym.getAddress();
+			var name = sym.getName();
+			var cmd = new DemanglerCmd(addr, name);
 			runCommand(cmd);
 			var demangled = cmd.getDemangledObject();
-			if (demangled == null || !sym.checkIsValid()) {
+			if (demangled == null) {
 				continue;
+			}
+			var syms = symtab.getSymbols(addr);
+			for (var s : syms) {
+				if (s != sym && !s.getName().equals(name)) {
+					sym = s;
+					break;
+				}
 			}
 			var ns = ensureDemangledClass(demangled.getNamespace(), global);
 			if (ns.getSymbol().getSymbolType() == global.getSymbol().getSymbolType()
