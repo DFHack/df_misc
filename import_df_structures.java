@@ -22,6 +22,7 @@ import ghidra.app.script.GhidraScript;
 import ghidra.app.services.AnalysisPriority;
 import ghidra.app.util.demangler.Demangled;
 import ghidra.framework.model.DomainFolder;
+import ghidra.program.database.data.DataTypeUtilities;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
@@ -323,6 +324,9 @@ public class import_df_structures extends GhidraScript {
 		DataType fakeInterfaceKeySet = new StructureDataType("set<interface_key>", 0);
 		fakeInterfaceKeySet = dtcStd.addDataType(fakeInterfaceKeySet, DataTypeConflictHandler.KEEP_HANDLER);
 		createDataType(dtcDemanglerStd, "set", fakeInterfaceKeySet);
+		DataType fakeInterfaceKeyNode = new StructureDataType("_Rb_tree_node<interface_key>", 0);
+		fakeInterfaceKeyNode = dtcStd.addDataType(fakeInterfaceKeyNode, DataTypeConflictHandler.KEEP_HANDLER);
+		createDataType(dtcDemanglerStd, "_Rb_tree_node", fakeInterfaceKeyNode);
 	}
 
 	private void processXMLInputs() throws Exception {
@@ -1818,8 +1822,29 @@ public class import_df_structures extends GhidraScript {
 			} else if (sym.getName().equals("~basic_string")) {
 				sym.setName("~string", SourceType.IMPORTED);
 			}
+			if (sym.getName(true).equals("std::_string_rep::_S_empty_rep_storage")) {
+				clearListing(addr);
+				var dt = dtcStd.getDataType("_string_rep");
+				createData(addr, dt);
+				createAsciiString(addr.add(dt.getLength()), 8);
+				createLabel(addr.add(dt.getLength()), "_S_empty_data", ns, false, SourceType.IMPORTED);
+			}
 			if (sym.getSymbolType() == SymbolType.FUNCTION) {
 				var func = (Function) sym.getObject();
+				for (var param : func.getParameters()) {
+					if (param.getDataType() instanceof Pointer) {
+						var ptr = (Pointer) param.getDataType();
+						if (ptr.getDataType() instanceof ghidra.program.model.data.TypeDef) {
+							var typedef = (ghidra.program.model.data.TypeDef) ptr.getDataType();
+							if (typedef.getCategoryPath().isAncestorOrSelf(new CategoryPath("/Demangler"))) {
+								param.setDataType(dtm.getPointer(typedef.getBaseDataType()), param.getSource());
+							}
+						} else if (ns.getName().equals("set<interface_key>") && DataTypeUtilities
+								.isSameOrEquivalentDataType(LongDataType.dataType, ptr.getDataType())) {
+							param.setDataType(dtm.getPointer(dtcEnums.getDataType("interface_key")), param.getSource());
+						}
+					}
+				}
 				if (ns instanceof GhidraClass
 						&& (!sym.getName().equals("create") || !ns.getName().equals("viewscreen_movieplayerst")))
 					func.setCallingConvention("__thiscall");
@@ -1862,6 +1887,9 @@ public class import_df_structures extends GhidraScript {
 		}
 		if (name.startsWith("basic_fstream<char") || name.equals("basic_fstream")) {
 			name = "fstream";
+		}
+		if (name.startsWith("_Rb_tree<long")) {
+			name = "set<interface_key>";
 		}
 		var cls = symtab.getNamespace(name, parent);
 		if (cls == null) {
