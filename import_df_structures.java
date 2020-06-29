@@ -1446,36 +1446,6 @@ public class import_df_structures extends GhidraScript {
 	private DataType createBitfieldDataType(TypeDef t) throws Exception {
 		var bt = t.baseType == null ? dtUint32 : dtcStd.getDataType(t.baseType);
 
-		boolean anyComplex = false;
-		for (var f : t.fields) {
-			if (f.hasCount && f.count != 1) {
-				anyComplex = true;
-				break;
-			}
-			if (f.typeName != null) {
-				anyComplex = true;
-				break;
-			}
-		}
-
-		if (anyComplex) {
-			var st = new StructureDataType(t.getName(), 0);
-			st.setToDefaultAlignment();
-			st.setMinimumAlignment(bt.getLength());
-
-			for (var f : t.fields) {
-				String name = null;
-				if (f.hasName)
-					name = f.name;
-				else if (f.hasAnonName)
-					name = t.getName() + "_" + f.anonName;
-				int count = f.hasCount ? f.count : 1;
-				st.addBitField(bt, count, name, null);
-			}
-
-			return createDataType(dtc, st);
-		}
-
 		var et = new EnumDataType(t.getName(), bt.getLength());
 		et.add("none_of_" + t.getName(), 0);
 		long mask = 1;
@@ -1486,10 +1456,34 @@ public class import_df_structures extends GhidraScript {
 			else if (f.hasAnonName)
 				name = t.getName() + "_" + f.anonName;
 
-			if (name != null) {
-				et.add(name, mask);
+			if (name == null) {
+				mask = mask << 1;
+				continue;
 			}
 
+			if (f.hasCount) {
+				long count = 1 << f.count;
+				if (f.typeName == null) {
+					for (long i = 0; i < count; i++) {
+						et.add(name + "_" + i, mask * i);
+					}
+				} else {
+					count--;
+					var e = (ghidra.program.model.data.Enum) getDataType(f.typeName);
+					for (var v : e.getValues()) {
+						if ((v & count) != count) {
+							continue;
+						}
+
+						et.add(name + "_" + e.getName(v), mask * v);
+					}
+				}
+
+				mask = mask << f.count;
+				continue;
+			}
+
+			et.add(name, mask);
 			mask = mask << 1;
 		}
 
