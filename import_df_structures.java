@@ -162,6 +162,8 @@ public class import_df_structures extends GhidraScript {
 		if (baseClassPadding == 1) {
 			// GCC
 
+			set.add(Undefined1DataType.dataType, "_M_key_compare", null);
+
 			Structure nodeBase = new StructureDataType("_Rb_tree_node_base<" + target.getName() + ">", 0);
 			nodeBase.setToDefaultAlignment();
 			nodeBase = (Structure) createDataType(dtcStd, nodeBase);
@@ -252,7 +254,7 @@ public class import_df_structures extends GhidraScript {
 			var dataPlus = new UnionDataType("_string_dataplus");
 			dataPlus.setToDefaultAlignment();
 			dataPlus.add(dtm.getPointer(rep));
-			dataPlus.add(dtm.getPointer(new TerminatedStringDataType()));
+			dataPlus.add(dtm.getPointer(TerminatedStringDataType.dataType));
 			createDataType(dtcStd, dataPlus);
 
 			stringDataType.add(dataPlus, "_M_p", null);
