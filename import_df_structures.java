@@ -27,6 +27,7 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.mem.MemoryBufferImpl;
+import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.SystemUtilities;
@@ -52,6 +53,8 @@ public class import_df_structures extends GhidraScript {
 	private DataType dtInt8, dtInt16, dtInt32, dtInt64;
 	private DataType dtInt, dtLong, dtSizeT;
 	private DataType dtString, dtFStream, dtVectorBool, dtDeque;
+	private Structure classTypeInfo, subClassTypeInfo, vmiClassTypeInfo;
+	private Address classVTable, subClassVTable, vmiClassVTable;
 	private int baseClassPadding;
 
 	private void debugln(String message) throws Exception {
@@ -238,8 +241,11 @@ public class import_df_structures extends GhidraScript {
 		bitVecDataType.setToDefaultAlignment();
 		fStreamDataType.setToDefaultAlignment();
 		dequeDataType.setToDefaultAlignment();
+		boolean isElf = false;
 		switch (currentProgram.getExecutableFormat()) {
 		case "Executable and Linking Format (ELF)":
+			isElf = true;
+			// fallthrough
 		case "Mac OS X Mach-O":
 			this.dtLong = createDataType(dtcStd, "long",
 					AbstractIntegerDataType.getSignedDataType(currentProgram.getDefaultPointerSize(), dtm));
@@ -276,6 +282,44 @@ public class import_df_structures extends GhidraScript {
 			dequeDataType.add(Undefined.getUndefinedDataType(10 * currentProgram.getDefaultPointerSize()));
 
 			this.baseClassPadding = 1;
+
+			Structure typeInfo = new StructureDataType("type_info", 0);
+			typeInfo.setToDefaultAlignment();
+			typeInfo.add(dtm.getPointer(DataType.DEFAULT), "_vtable", null);
+			typeInfo.add(dtm.getPointer(TerminatedStringDataType.dataType), "__name", null);
+			typeInfo = (Structure) createDataType(dtcStd, typeInfo);
+
+			var dtcABI = dtm.getRootCategory().createCategory("__cxxabiv1");
+			this.classTypeInfo = new StructureDataType("__class_type_info", 0);
+			this.classTypeInfo.setToDefaultAlignment();
+			this.classTypeInfo.add(typeInfo, "_super", null);
+			this.classTypeInfo = (Structure) createDataType(dtcABI, this.classTypeInfo);
+
+			this.subClassTypeInfo = new StructureDataType("__si_class_type_info", 0);
+			this.subClassTypeInfo.setToDefaultAlignment();
+			this.subClassTypeInfo.add(typeInfo, "_super", null);
+			this.subClassTypeInfo.add(dtm.getPointer(this.classTypeInfo), "__base_type", null);
+			this.subClassTypeInfo = (Structure) createDataType(dtcABI, this.subClassTypeInfo);
+
+			Structure baseClassTypeInfo = new StructureDataType("__base_class_type_info", 0);
+			baseClassTypeInfo.setToDefaultAlignment();
+			baseClassTypeInfo.add(dtm.getPointer(this.classTypeInfo), "__base_type", null);
+			baseClassTypeInfo.add(dtSizeT, "__offset_flags", null);
+			baseClassTypeInfo = (Structure) createDataType(dtcABI, baseClassTypeInfo);
+
+			this.vmiClassTypeInfo = new StructureDataType("__vmi_class_type_info", 0);
+			this.vmiClassTypeInfo.add(typeInfo, "_super", null);
+			this.vmiClassTypeInfo.add(dtUint32, "__flags", null);
+			this.vmiClassTypeInfo.add(dtUint32, "__base_count", null);
+			this.vmiClassTypeInfo.add(new ArrayDataType(baseClassTypeInfo, 1, -1), "__base_info", null);
+			this.vmiClassTypeInfo = (Structure) createDataType(dtcABI, this.vmiClassTypeInfo);
+
+			this.classVTable = getSymbols((isElf ? "" : "_") + "_ZTVN10__cxxabiv117__class_type_infoE", null).get(0)
+					.getAddress().add(2 * currentProgram.getDefaultPointerSize());
+			this.subClassVTable = getSymbols((isElf ? "" : "_") + "_ZTVN10__cxxabiv120__si_class_type_infoE", null)
+					.get(0).getAddress().add(2 * currentProgram.getDefaultPointerSize());
+			this.vmiClassVTable = getSymbols((isElf ? "" : "_") + "_ZTVN10__cxxabiv121__vmi_class_type_infoE", null)
+					.get(0).getAddress().add(2 * currentProgram.getDefaultPointerSize());
 
 			break;
 		case "Portable Executable (PE)":
@@ -1588,9 +1632,38 @@ public class import_df_structures extends GhidraScript {
 		}
 	}
 
+	private void labelTypeInfoPointer(Address addr, String name) throws Exception {
+		var defaultPointerType = dtm.getPointer(DataType.DEFAULT);
+		var tiAddr = (Address) defaultPointerType.getValue(new MemoryBufferImpl(currentProgram.getMemory(), addr), null,
+				-1);
+		var tiVTAddr = (Address) defaultPointerType.getValue(new MemoryBufferImpl(currentProgram.getMemory(), tiAddr),
+				null, -1);
+
+		Data ti;
+		if (tiVTAddr.getOffset() == this.classVTable.getOffset()) {
+			ti = labelData(tiAddr, this.classTypeInfo, "type_info_" + name, -1);
+		} else if (tiVTAddr.getOffset() == this.subClassVTable.getOffset()) {
+			ti = labelData(tiAddr, this.subClassTypeInfo, "type_info_" + name, -1);
+		} else if (tiVTAddr.getOffset() == this.vmiClassVTable.getOffset()) {
+			ti = labelData(tiAddr, this.vmiClassTypeInfo, "type_info_" + name, -1);
+			if (((Scalar) ti.getComponent(2).getValue()).getValue() != 1) { // __base_count
+				printerr("Unexpected __base_count for vmi type info pointer at " + addr);
+			}
+		} else {
+			printerr("Could not determine typeinfo pointer type at " + addr);
+			return;
+		}
+
+		createData(addr.subtract(defaultPointerType.getLength()), dtSizeT);
+		createData(addr, dtm.getPointer(ti.getDataType()));
+	}
+
 	private void labelVTable(Namespace ns, Address addr, GhidraClass cls, DataType dt) throws Exception {
 		labelData(addr, dt, dt.getName(), 0);
 		labelVMethods(addr, cls, (Structure) dt);
+		if (this.classTypeInfo != null) {
+			labelTypeInfoPointer(addr.subtract(currentProgram.getDefaultPointerSize()), cls.getName());
+		}
 	}
 
 	private void labelVTables() throws Exception {
