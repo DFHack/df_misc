@@ -301,6 +301,7 @@ sub render_class_vtable_fields {
     my $voff = 0;
     for my $meth ($vms->findnodes('child::vmethod')) {
         my $name = $meth->getAttribute('name') || $meth->getAttribute('ld:anon-name') || "vmeth_$voff";
+        if ($meth->getAttribute('is-destructor')) { $name = "destructor" ; }
         # TODO actual prototype ?
         push @lines, "void *$name;";
         $voff += 4;
@@ -556,6 +557,7 @@ sub render_stlvector {
         }
     } elsif ($tgm eq 'number') {
         my $tgst = $tg->getAttribute('ld:subtype');
+        $tgst = 'int32_t' if !defined $tgst || ($tgst eq 'bitfield' && !$tg->getAttribute('base-type'));
         $tgst = $tg->getAttribute('base-type') if (!$tgst or $tgst eq 'enum' or $tgst eq 'bitfield');
         $tgst = 'int8_t' if $tgst eq 'bool';    # dont confuse with stl-bit-vector
         push @lines, "struct stl_vector_$tgst";
@@ -565,6 +567,20 @@ sub render_stlvector {
         if ($tgtm eq 'enum-type' or $tgtm eq 'bitfield-type') {
             my $tgtst = $tgt->getAttribute('base-type') || 'int32_t';
             push @lines, "struct stl_vector_$tgtst";
+        } elsif ($tgtm eq 'struct-type' && ($tgt->getAttribute('is-union') eq 'true')) {
+            my $utg = $tgt->findnodes('child::ld:field')->[0];
+            while (1) {
+                my $tgtst = $utg->getAttribute('ld:subtype');
+                if ($tgtst) {
+                    push @lines, "struct stl_vector_$tgtst";
+                    last;
+                }
+                $utg = $utg->findnodes('child::ld:field')->[0];
+                if (!$utg) {
+                    push @lines, "// TODO in $prefix: struct stl_vector_global-$tgtm";
+                    last;
+                }
+            }
         } else {
             push @lines, "// TODO in $prefix: struct stl_vector_global-$tgtm";
         }
@@ -640,7 +656,7 @@ sub render_item_primitive {
         if ($linux) {
             push @lines, "int32_t fstream[71]";     # (284 bytes, 4o align)
         } else {
-            push @lines, "int64_t fstream[24]";     # (192 bytes, 8o align)
+            push @lines, "int64_t fstream[35]";     # (280 bytes, 8o align)
         }
     } else {
         print "no render primitive $subtype\n";
@@ -729,10 +745,6 @@ struct stl_vector_bool {
 };
 
 EOS
-    if ($bin32) {
-        $vecpad = "    int32_t pad;\n";
-    }
-
 } else {
 $hdr .= <<EOS;
 // Linux Glibc STL
