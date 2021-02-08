@@ -1786,7 +1786,7 @@ public class import_df_structures extends GhidraScript {
 			long dataAddr;
 			if (currentProgram.getDefaultPointerSize() == 4) {
 				dataAddr = nameAddr >>> 32;
-				nameAddr = nameAddr & 0xffffffff;
+				nameAddr = nameAddr & 0xffffffffL;
 			} else {
 				dataAddr = mem.getLong(addr.addNoWrap(8));
 			}
@@ -1918,7 +1918,7 @@ public class import_df_structures extends GhidraScript {
 						&& (!sym.getName().equals("create") || !ns.getName().equals("viewscreen_movieplayerst")))
 					func.setCallingConvention("__thiscall");
 				else
-					func.setCallingConvention("__stdcall");
+					func.setCallingConvention("default");
 			}
 		}
 	}
