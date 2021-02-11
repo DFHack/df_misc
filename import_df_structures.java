@@ -338,7 +338,7 @@ public class import_df_structures extends GhidraScript {
 			bitVecDataType.add(Undefined.getUndefinedDataType(4 * currentProgram.getDefaultPointerSize()));
 
 			fStreamDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
-			fStreamDataType.add(Undefined.getUndefinedDataType(22 * currentProgram.getDefaultPointerSize() + 96));
+			fStreamDataType.add(Undefined.getUndefinedDataType(22 * currentProgram.getDefaultPointerSize() + 104));
 
 			dequeDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
 			dequeDataType.add(Undefined.getUndefinedDataType(5 * currentProgram.getDefaultPointerSize()));
@@ -980,7 +980,8 @@ public class import_df_structures extends GhidraScript {
 							// ignore
 							break;
 						case "anon-compound":
-							((IOwnsType) stack.peek()).getOwnedType().typeName = "(anon compound)";
+							((IOwnsType) stack.peek()).getOwnedType().typeName = "anon_compound_"
+									+ reader.getLocation().getCharacterOffset();
 							break;
 						default:
 							printerr("Unhandled XML attribute name: ld:" + reader.getAttributeLocalName(i));
@@ -1059,7 +1060,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private void findAnonymousTypes(List<TypeDef> toAdd, TypeDef parent) throws Exception {
-		var prefix = parent.getName() + "::";
+		var prefix = parent.getName() + "__SCOPE__";
 		for (var field : parent.fields) {
 			findAnonymousTypes(toAdd, prefix, field);
 		}
