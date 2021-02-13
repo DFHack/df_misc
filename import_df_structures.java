@@ -1356,7 +1356,9 @@ public class import_df_structures extends GhidraScript {
 		if (t.inheritsFrom != null) {
 			addStructFields(st, codegen.typesByName.get(t.inheritsFrom));
 
-			int pastAlignment = st.getLength() % this.baseClassPadding;
+			DataTypeComponent lastComponent = st.getComponent(st.getNumComponents() - 1);
+			int componentLength = lastComponent.getOffset() + lastComponent.getLength();
+			int pastAlignment = componentLength % this.baseClassPadding;
 			if (pastAlignment != 0) {
 				st.add(new ArrayDataType(Undefined1DataType.dataType, this.baseClassPadding - pastAlignment, 1), null,
 						"base class padding for " + t.getName());
