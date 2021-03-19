@@ -308,6 +308,7 @@ public class import_df_structures extends GhidraScript {
 			baseClassTypeInfo = (Structure) createDataType(dtcABI, baseClassTypeInfo);
 
 			this.vmiClassTypeInfo = new StructureDataType("__vmi_class_type_info", 0);
+			this.vmiClassTypeInfo.setToDefaultAlignment();
 			this.vmiClassTypeInfo.add(typeInfo, "_super", null);
 			this.vmiClassTypeInfo.add(dtUint32, "__flags", null);
 			this.vmiClassTypeInfo.add(dtUint32, "__base_count", null);
