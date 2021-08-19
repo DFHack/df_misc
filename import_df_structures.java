@@ -132,13 +132,16 @@ public class import_df_structures extends GhidraScript {
 			Structure ptr_wrapper = new StructureDataType("ptr_to_" + base.getName(), 0);
 			ptr_wrapper = (Structure) dtm.getCategory(base.getCategoryPath()).addDataType(ptr_wrapper,
 					DataTypeConflictHandler.REPLACE_HANDLER);
-			ptr_wrapper.setToDefaultAlignment();
+			ptr_wrapper.setToDefaultAligned();
+			ptr_wrapper.setPackingEnabled(true);
 			ptr_wrapper.add(target, "ptr", null);
 			ptr = dtm.getPointer(ptr_wrapper);
 		}
 
 		var vec = new StructureDataType(name, 0);
-		vec.setToDefaultAlignment();
+		vec.setToDefaultAligned();
+		vec.setPackingEnabled(true);
+		
 		vec.add(ptr, "_M_start", null);
 		vec.add(ptr, "_M_finish", null);
 		vec.add(ptr, "_M_end_of_storage", null);
@@ -156,11 +159,13 @@ public class import_df_structures extends GhidraScript {
 			return existing;
 
 		Structure node = new StructureDataType("_Rb_tree_node<" + target.getName() + ">", 0);
-		node.setToDefaultAlignment();
+		node.setToDefaultAligned();
+		node.setPackingEnabled(true);
 		node = (Structure) createDataType(dtcStd, node);
 
 		var set = new StructureDataType(name, 0);
-		set.setToDefaultAlignment();
+		set.setToDefaultAligned();
+		set.setPackingEnabled(true);
 
 		if (baseClassPadding == 1) {
 			// GCC
@@ -168,7 +173,8 @@ public class import_df_structures extends GhidraScript {
 			set.add(Undefined1DataType.dataType, "_M_key_compare", null);
 
 			Structure nodeBase = new StructureDataType("_Rb_tree_node_base<" + target.getName() + ">", 0);
-			nodeBase.setToDefaultAlignment();
+			nodeBase.setToDefaultAligned();
+			nodeBase.setPackingEnabled(true);
 			nodeBase = (Structure) createDataType(dtcStd, nodeBase);
 			nodeBase.add(BooleanDataType.dataType, "_M_color", null);
 			nodeBase.add(dtm.getPointer(node), "_M_parent", null);
@@ -207,7 +213,8 @@ public class import_df_structures extends GhidraScript {
 			return existing;
 
 		var arr = new StructureDataType(name, 0);
-		arr.setToDefaultAlignment();
+		arr.setToDefaultAligned();
+		arr.setPackingEnabled(true);
 		arr.add(ptr, "ptr", null);
 		arr.add(dtInt, "length", null);
 
@@ -237,10 +244,15 @@ public class import_df_structures extends GhidraScript {
 		var bitVecDataType = new StructureDataType("vector<bool>", 0);
 		var fStreamDataType = new StructureDataType("fstream", 0);
 		var dequeDataType = new StructureDataType("deque", 0);
-		stringDataType.setToDefaultAlignment();
-		bitVecDataType.setToDefaultAlignment();
-		fStreamDataType.setToDefaultAlignment();
-		dequeDataType.setToDefaultAlignment();
+		stringDataType.setToDefaultAligned();
+		stringDataType.setPackingEnabled(true);
+		bitVecDataType.setToDefaultAligned();
+		bitVecDataType.setPackingEnabled(true);
+		fStreamDataType.setToDefaultAligned();
+		fStreamDataType.setPackingEnabled(true);
+		dequeDataType.setToDefaultAligned();
+		dequeDataType.setPackingEnabled(true);
+		
 		boolean isElf = false;
 		switch (currentProgram.getExecutableFormat()) {
 		case "Executable and Linking Format (ELF)":
@@ -251,14 +263,15 @@ public class import_df_structures extends GhidraScript {
 					AbstractIntegerDataType.getSignedDataType(currentProgram.getDefaultPointerSize(), dtm));
 
 			var rep = new StructureDataType("_string_rep", 0);
-			rep.setToDefaultAlignment();
+			rep.setToDefaultAligned();
+			rep.setPackingEnabled(true);
 			rep.add(dtSizeT, "_M_length", null);
 			rep.add(dtSizeT, "_M_capacity", null);
 			rep.add(dtInt, "_M_refcount", null);
 			createDataType(dtcStd, rep);
 
 			var dataPlus = new UnionDataType("_string_dataplus");
-			dataPlus.setToDefaultAlignment();
+			dataPlus.setToDefaultAligned();
 			dataPlus.add(dtm.getPointer(rep));
 			dataPlus.add(dtm.getPointer(TerminatedStringDataType.dataType));
 			createDataType(dtcStd, dataPlus);
@@ -266,7 +279,8 @@ public class import_df_structures extends GhidraScript {
 			stringDataType.add(dataPlus, "_M_p", null);
 
 			var biterator = new StructureDataType("_bit_iterator", 0);
-			biterator.setToDefaultAlignment();
+			biterator.setToDefaultAligned();
+			biterator.setPackingEnabled(true);
 			biterator.add(dtm.getPointer(dtSizeT), "_M_p", null);
 			biterator.add(dtUint32, "_M_offset", null);
 			createDataType(dtcStd, biterator);
@@ -275,40 +289,45 @@ public class import_df_structures extends GhidraScript {
 			bitVecDataType.add(biterator, "_M_finish", null);
 			bitVecDataType.add(dtm.getPointer(dtSizeT), "_M_end_of_storage", null);
 
-			fStreamDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
+			fStreamDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			fStreamDataType.add(Undefined.getUndefinedDataType(61 * currentProgram.getDefaultPointerSize() + 40));
 
-			dequeDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
+			dequeDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			dequeDataType.add(Undefined.getUndefinedDataType(10 * currentProgram.getDefaultPointerSize()));
 
 			this.baseClassPadding = 1;
 
 			Structure typeInfo = new StructureDataType("type_info", 0);
-			typeInfo.setToDefaultAlignment();
+			typeInfo.setToDefaultAligned();
+			typeInfo.setPackingEnabled(true);
 			typeInfo.add(dtm.getPointer(DataType.DEFAULT), "_vtable", null);
 			typeInfo.add(dtm.getPointer(TerminatedStringDataType.dataType), "__name", null);
 			typeInfo = (Structure) createDataType(dtcStd, typeInfo);
 
 			var dtcABI = dtm.getRootCategory().createCategory("__cxxabiv1");
 			this.classTypeInfo = new StructureDataType("__class_type_info", 0);
-			this.classTypeInfo.setToDefaultAlignment();
+			this.classTypeInfo.setToDefaultAligned();
+			this.classTypeInfo.setPackingEnabled(true);
 			this.classTypeInfo.add(typeInfo, "_super", null);
 			this.classTypeInfo = (Structure) createDataType(dtcABI, this.classTypeInfo);
 
 			this.subClassTypeInfo = new StructureDataType("__si_class_type_info", 0);
-			this.subClassTypeInfo.setToDefaultAlignment();
+			this.subClassTypeInfo.setToDefaultAligned();
+			this.subClassTypeInfo.setPackingEnabled(true);
 			this.subClassTypeInfo.add(typeInfo, "_super", null);
 			this.subClassTypeInfo.add(dtm.getPointer(this.classTypeInfo), "__base_type", null);
 			this.subClassTypeInfo = (Structure) createDataType(dtcABI, this.subClassTypeInfo);
 
 			Structure baseClassTypeInfo = new StructureDataType("__base_class_type_info", 0);
-			baseClassTypeInfo.setToDefaultAlignment();
+			baseClassTypeInfo.setToDefaultAligned();
+			baseClassTypeInfo.setPackingEnabled(true);
 			baseClassTypeInfo.add(dtm.getPointer(this.classTypeInfo), "__base_type", null);
 			baseClassTypeInfo.add(dtSizeT, "__offset_flags", null);
 			baseClassTypeInfo = (Structure) createDataType(dtcABI, baseClassTypeInfo);
 
 			this.vmiClassTypeInfo = new StructureDataType("__vmi_class_type_info", 0);
-			this.vmiClassTypeInfo.setToDefaultAlignment();
+			this.vmiClassTypeInfo.setToDefaultAligned();
+			this.vmiClassTypeInfo.setPackingEnabled(true);
 			this.vmiClassTypeInfo.add(typeInfo, "_super", null);
 			this.vmiClassTypeInfo.add(dtUint32, "__flags", null);
 			this.vmiClassTypeInfo.add(dtUint32, "__base_count", null);
@@ -327,7 +346,7 @@ public class import_df_structures extends GhidraScript {
 			this.dtLong = createDataType(dtcStd, "long", AbstractIntegerDataType.getSignedDataType(4, dtm));
 
 			var stringVal = new UnionDataType("_string_val");
-			stringVal.setToDefaultAlignment();
+			stringVal.setToDefaultAligned();
 			stringVal.add(StringDataType.dataType, 16, "_Buf", null);
 			stringVal.add(dtm.getPointer(TerminatedStringDataType.dataType), "_Ptr", null);
 
@@ -335,13 +354,13 @@ public class import_df_structures extends GhidraScript {
 			stringDataType.add(dtSizeT, "_Mysize", null);
 			stringDataType.add(dtSizeT, "_Myres", null);
 
-			bitVecDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
+			bitVecDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			bitVecDataType.add(Undefined.getUndefinedDataType(4 * currentProgram.getDefaultPointerSize()));
 
-			fStreamDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
+			fStreamDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			fStreamDataType.add(Undefined.getUndefinedDataType(22 * currentProgram.getDefaultPointerSize() + 104));
 
-			dequeDataType.setMinimumAlignment(currentProgram.getDefaultPointerSize());
+			dequeDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			dequeDataType.add(Undefined.getUndefinedDataType(5 * currentProgram.getDefaultPointerSize()));
 
 			this.baseClassPadding = currentProgram.getDefaultPointerSize();
@@ -1248,7 +1267,8 @@ public class import_df_structures extends GhidraScript {
 		DataType bitsType = Undefined1DataType.dataType;
 		if (enumName != null) {
 			Structure bitsStruct = new StructureDataType(name + "_bits", 0);
-			bitsStruct.setToDefaultAlignment();
+			bitsStruct.setToDefaultAligned();
+			bitsStruct.setPackingEnabled(true);
 			bitsStruct = (Structure) dtc.addDataType(bitsStruct, DataTypeConflictHandler.REPLACE_HANDLER);
 
 			var et = this.codegen.typesByName.get(enumName);
@@ -1275,7 +1295,7 @@ public class import_df_structures extends GhidraScript {
 		}
 
 		var bitArrayDataType = new StructureDataType(name, 0);
-		bitArrayDataType.setToDefaultAlignment();
+		bitArrayDataType.setToDefaultAligned();
 		bitArrayDataType.add(dtm.getPointer(bitsType), "ptr", null);
 		bitArrayDataType.add(dtInt, "count", null);
 
@@ -1291,7 +1311,8 @@ public class import_df_structures extends GhidraScript {
 			Structure wrapper = new StructureDataType(item.getName() + "_wrapper", 0);
 			wrapper = (Structure) dtm.getCategory(item.getCategoryPath()).addDataType(wrapper,
 					DataTypeConflictHandler.REPLACE_HANDLER);
-			wrapper.setToDefaultAlignment();
+			wrapper.setToDefaultAligned();
+			wrapper.setPackingEnabled(true);
 			wrapper.add(item, "array", null);
 			item = wrapper;
 		}
@@ -1318,7 +1339,8 @@ public class import_df_structures extends GhidraScript {
 		}
 
 		var dt = new StructureDataType(item.getName() + "[<" + indexEnumName + ">" + count + "]", 0);
-		dt.setToDefaultAlignment();
+		dt.setToDefaultAligned();
+		dt.setPackingEnabled(true);
 		for (int i = 0; i < count; i++) {
 			if (names[i] == null) {
 				dt.add(item, indexEnumName + "_anon_" + i, null);
@@ -1375,7 +1397,9 @@ public class import_df_structures extends GhidraScript {
 		Composite st = t.isUnion ? new UnionDataType(t.getName()) : new StructureDataType(t.getName(), 0);
 		// add early to avoid recursion
 		st = (Composite) dtc.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
-		st.setToDefaultAlignment();
+		st.setToDefaultAligned();
+		st.setPackingEnabled(true);
+
 
 		addStructFields(st, t);
 
@@ -1415,7 +1439,8 @@ public class import_df_structures extends GhidraScript {
 		Structure st = new StructureDataType("vtable_" + t.getName(), 0);
 		// add early to avoid recursion
 		st = (Structure) dtcVTables.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
-		st.setToDefaultAlignment();
+		st.setToDefaultAligned();
+		st.setPackingEnabled(true);
 
 		if (t.inheritsFrom != null) {
 			st.add(createVTableDataType(codegen.typesByName.get(t.inheritsFrom)), "_super", null);
@@ -1481,7 +1506,8 @@ public class import_df_structures extends GhidraScript {
 		Structure st = new StructureDataType(t.getName(), 0);
 		// add early to avoid recursion
 		st = (Structure) dtc.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
-		st.setToDefaultAlignment();
+		st.setToDefaultAligned();
+		st.setPackingEnabled(true);
 		st.add(dtm.getPointer(createVTableDataType(t)), "_vtable", null);
 
 		addStructFields(st, t);
@@ -1674,9 +1700,7 @@ public class import_df_structures extends GhidraScript {
 		updateProgressMajor("Labelling vtables...");
 		monitor.initialize(symbolTable.vtables.size());
 
-		var ns = symtab.getNamespace("df", null);
-		if (ns == null)
-			ns = symtab.createNameSpace(null, "df", SourceType.IMPORTED);
+		Namespace ns = null;
 
 		int i = 0;
 		for (var vt : symbolTable.vtables) {
@@ -1758,14 +1782,16 @@ public class import_df_structures extends GhidraScript {
 		var voidPointer = dtm.getPointer(DataType.VOID);
 		Structure globalTableEntryType = new StructureDataType("global_variable_table_entry", 0);
 
-		globalTableEntryType.setToDefaultAlignment();
+		globalTableEntryType.setToDefaultAligned();
+		globalTableEntryType.setPackingEnabled(true);
 		globalTableEntryType.add(stringPointer, "name", "");
 		globalTableEntryType.add(voidPointer, "addr", "");
 		globalTableEntryType = (Structure) dtc.addDataType(globalTableEntryType,
 				DataTypeConflictHandler.REPLACE_HANDLER);
 
 		Structure globalTableType = new StructureDataType("global_variable_table", 0);
-		globalTableType.setToDefaultAlignment();
+		globalTableType.setToDefaultAligned();
+		globalTableType.setPackingEnabled(true);
 		byte[] magic;
 		globalTableType.add(DWordDataType.dataType, "magic1", "12345678h");
 		if (currentProgram.getDefaultPointerSize() == 4) {
@@ -1803,7 +1829,7 @@ public class import_df_structures extends GhidraScript {
 			var nameLength = TerminatedStringDataType.dataType.getLength(buf, -1);
 			var name = (String) TerminatedStringDataType.dataType.getValue(buf, null, nameLength);
 			var data = toAddr(dataAddr);
-			if (!symtab.hasSymbol(data)) {
+			if (name != null && !symtab.hasSymbol(data)) {
 				createLabel(data, name, false, SourceType.IMPORTED);
 			}
 		}
@@ -1879,9 +1905,9 @@ public class import_df_structures extends GhidraScript {
 			if (ns.getSymbol().getSymbolType() == global.getSymbol().getSymbolType()
 					&& !sym.getName().startsWith("operator.") && !Character.isUpperCase(sym.getName().charAt(0))
 					&& !sym.getName().equals("itoa")) {
-				var dfns = symtab.getNamespace("df", ns);
+				var dfns = ns;
 				if (dfns == null) {
-					dfns = symtab.createNameSpace(ns, "df", SourceType.IMPORTED);
+					dfns = ns;
 				}
 				ns = dfns;
 			}
@@ -1935,9 +1961,9 @@ public class import_df_structures extends GhidraScript {
 		var name = namespace.getName();
 		if (parent.getSymbol().getSymbolType() == global.getSymbol().getSymbolType() && (name.endsWith("st")
 				|| name.startsWith("renderer_") || name.equals("textures") || name.equals("KeybindingScreen"))) {
-			var dfns = symtab.getNamespace("df", parent);
+			var dfns = parent;
 			if (dfns == null) {
-				dfns = symtab.createNameSpace(parent, "df", SourceType.IMPORTED);
+				dfns = parent;
 			}
 			parent = dfns;
 		}
