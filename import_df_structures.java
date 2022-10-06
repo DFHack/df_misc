@@ -272,6 +272,7 @@ public class import_df_structures extends GhidraScript {
 
 			var dataPlus = new UnionDataType("_string_dataplus");
 			dataPlus.setToDefaultAligned();
+			dataPlus.setPackingEnabled(true);
 			dataPlus.add(dtm.getPointer(rep));
 			dataPlus.add(dtm.getPointer(TerminatedStringDataType.dataType));
 			createDataType(dtcStd, dataPlus);
@@ -347,6 +348,7 @@ public class import_df_structures extends GhidraScript {
 
 			var stringVal = new UnionDataType("_string_val");
 			stringVal.setToDefaultAligned();
+			stringVal.setPackingEnabled(true);
 			stringVal.add(StringDataType.dataType, 16, "_Buf", null);
 			stringVal.add(dtm.getPointer(TerminatedStringDataType.dataType), "_Ptr", null);
 
@@ -1296,6 +1298,7 @@ public class import_df_structures extends GhidraScript {
 
 		var bitArrayDataType = new StructureDataType(name, 0);
 		bitArrayDataType.setToDefaultAligned();
+		bitArrayDataType.setPackingEnabled(true);
 		bitArrayDataType.add(dtm.getPointer(bitsType), "ptr", null);
 		bitArrayDataType.add(dtInt, "count", null);
 
