@@ -127,6 +127,10 @@ public class import_df_structures extends GhidraScript {
 			return existing;
 
 		var ptr = dtm.getPointer(target);
+
+		// this code was a workaround for a defect in ghidra 9 which has been fixed in ghidra 10
+		
+		/*
 		if (target instanceof Pointer) {
 			var base = ((Pointer) target).getDataType();
 			Structure ptr_wrapper = new StructureDataType("ptr_to_" + base.getName(), 0);
@@ -137,6 +141,7 @@ public class import_df_structures extends GhidraScript {
 			ptr_wrapper.add(target, "ptr", null);
 			ptr = dtm.getPointer(ptr_wrapper);
 		}
+		 */
 
 		var vec = new StructureDataType(name, 0);
 		vec.setToDefaultAligned();
@@ -272,6 +277,7 @@ public class import_df_structures extends GhidraScript {
 
 			var dataPlus = new UnionDataType("_string_dataplus");
 			dataPlus.setToDefaultAligned();
+			dataPlus.setPackingEnabled(true);
 			dataPlus.add(dtm.getPointer(rep));
 			dataPlus.add(dtm.getPointer(TerminatedStringDataType.dataType));
 			createDataType(dtcStd, dataPlus);
@@ -347,6 +353,7 @@ public class import_df_structures extends GhidraScript {
 
 			var stringVal = new UnionDataType("_string_val");
 			stringVal.setToDefaultAligned();
+			stringVal.setPackingEnabled(true);
 			stringVal.add(StringDataType.dataType, 16, "_Buf", null);
 			stringVal.add(dtm.getPointer(TerminatedStringDataType.dataType), "_Ptr", null);
 
@@ -1296,6 +1303,7 @@ public class import_df_structures extends GhidraScript {
 
 		var bitArrayDataType = new StructureDataType(name, 0);
 		bitArrayDataType.setToDefaultAligned();
+		bitArrayDataType.setPackingEnabled(true);
 		bitArrayDataType.add(dtm.getPointer(bitsType), "ptr", null);
 		bitArrayDataType.add(dtInt, "count", null);
 
