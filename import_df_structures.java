@@ -1517,10 +1517,11 @@ public class import_df_structures extends GhidraScript {
 		st.setToDefaultAligned();
 		st.setPackingEnabled(true);
 		st.add(dtm.getPointer(createVTableDataType(t)), "_vtable", null);
-
 		addStructFields(st, t);
 
 		st = (Structure) createDataType(dtc, st);
+		st.setToDefaultAligned();
+		st.setPackingEnabled(true);
 
 		addToBaseClassUnion(t, st);
 
