@@ -1598,19 +1598,57 @@ public class import_df_structures extends GhidraScript {
 					+ (syms.length > 0 ? syms[0].getName() : "(unnamed)"));
 		}
 	}
+	
+	private void cleanExistingData(Address addr, DataType dt) throws Exception {
+		var listing = currentProgram.getListing();
+		
+		// If data is zero length, we don't need to check (probably)
+		if (dt.isZeroLength()) {
+			return;
+		}
+		
+		// Need to check if the area of data we want to label is already defined within the listing database
+		// First, we check for overlapping data that starts before our data's first address
+		// Like so:
+		//       | New Data |
+		// | Old Data |
+		// TODO: Check if existing data is the same as the data we are setting. If not, prompt user for which one to keep
+		DataIterator backwardsDataIt = listing.getData(addr, false);
+		while (backwardsDataIt.hasNext()) {
+			Data prev = backwardsDataIt.next();
+			// Check if the start of our data (addr) is before prev's maxAddress
+			if (addr.compareTo(prev.getMaxAddress()) <= 0) {
+				cleanOverlappingData(prev);
+			}
+			else {
+				break;
+			}
+		}
+
+		// Secondly, we check for overlapping data that begins within our data's range
+		// Like so:
+		// | New Data |
+		//       | Old Data |		
+		DataIterator forwardsDataIt = listing.getData(addr, true);
+		Address maxAddr = addr.add(dt.getLength());
+		while (forwardsDataIt.hasNext()) {
+			Data next = forwardsDataIt.next();
+			// Check if the end of our data (maxAddr) is before next's minAddress
+			if (maxAddr.compareTo(next.getMinAddress()) >= 0) {
+				cleanOverlappingData(next);
+			}
+			else {
+				break;
+			}
+		}
+	}
 
 	private Data labelData(Address addr, DataType dt, String name, int size) throws Exception {
 		debugln("labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::" + dt.getName()
 				+ ") ");
+		
+		cleanExistingData(addr, dt);
 		var listing = currentProgram.getListing();
-		var prevExisting = listing.getData(addr, false);
-		if (prevExisting.hasNext()) {
-			var prev = prevExisting.next();
-			if (addr.compareTo(prev.getMaxAddress()) <= 0) {
-				cleanOverlappingData(prev);
-			}
-		}
-
 		Data data = null;
 		try {
 			data = listing.createData(addr, dt, size);
