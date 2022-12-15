@@ -70,6 +70,7 @@ public class import_df_structures extends GhidraScript {
 
 		createStdDataTypes();
 		processXMLInputs();
+		createdTypes = new HashSet<>();
 		this.symbolTable = symbols.findTable(currentProgram);
 		println("selected symbol table: " + symbolTable.name);
 		preprocessTypes();
@@ -1122,6 +1123,8 @@ public class import_df_structures extends GhidraScript {
 		}
 	}
 
+	private HashSet<String> createdTypes;
+
 	private DataType createDataType(TypeDef t) throws Exception {
 		if (t.meta.equals("enum-type")) {
 			int minSize = t.enumRequiredBits();
@@ -1131,33 +1134,46 @@ public class import_df_structures extends GhidraScript {
 			}
 			return getOrCreateEnumDataType(t, 0);
 		}
-		var existing = dtc.getDataType(t.getName());
-		if (existing != null)
-			return existing;
+		if (createdTypes.contains(t.getName()) ) {
+			var existing = dtc.getDataType(t.getName());
+			if (existing != null)
+				return existing;
+		}
 
+		createdTypes.add(t.getName());
+		
+		DataType n;
 		switch (t.meta) {
 		case "bitfield-type":
-			return createBitfieldDataType(t);
+			n = createBitfieldDataType(t);
+			break;
 		case "struct-type":
-			return createStructDataType(t);
+			n = createStructDataType(t);
+			break;
 		case "class-type":
-			return createClassDataType(t);
+			n = createClassDataType(t);
+			break;
 		case "static-array":
-			return createDataType(dtc, t.getName(), getDataType(t.fields.get(0)));
+			n = createDataType(dtc, t.getName(), getDataType(t.fields.get(0)));
+			break;
 		default:
 			throw new Exception("Unhandled type meta for " + t.getName() + ": " + t.meta);
 		}
-	}
+		return n;
+}
 
 	private DataType getOrCreateEnumDataType(TypeDef t, int size) throws Exception {
 		var name = t.getName();
 		if (size != 0) {
 			name += "(" + (size * 8) + "-bit)";
 		}
-		var existing = dtcEnums.getDataType(name);
-		if (existing != null) {
-			return existing;
+		if (createdTypes.contains(t.getName()) ) {
+			var existing = dtcEnums.getDataType(t.getName());
+			if (existing != null)
+				return existing;
 		}
+		
+		createdTypes.add(t.getName());
 
 		if (size == 0) {
 			if (t.baseType == null || t.baseType.isEmpty()) {
@@ -1167,7 +1183,8 @@ public class import_df_structures extends GhidraScript {
 			}
 		}
 
-		return createEnumDataType(t, name, size);
+		DataType n = createEnumDataType(t, name, size);
+		return n;
 	}
 
 	private DataType getDataType(String name) throws Exception {
