@@ -445,6 +445,10 @@ public class import_df_structures extends GhidraScript {
 	private interface IHasFields {
 		List<TypeDef.Field> getFields();
 	}
+	
+	private interface IHasComment {
+		void setComment(String comment);
+	}
 
 	private static abstract class NameHaver implements IHasName {
 		public boolean hasName;
@@ -491,11 +495,17 @@ public class import_df_structures extends GhidraScript {
 		public final List<TypeDef.Field> globals = new ArrayList<>();
 	}
 
-	private static class TypeDef implements ILoweredData, IOwnsType, IHasFields {
-		public static class EnumItem extends NameValueHaver {
+	private static class TypeDef implements ILoweredData, IOwnsType, IHasFields, IHasComment {
+		public static class EnumItem extends NameValueHaver implements IHasComment {
+			public String comment;
+			
+			@Override
+			public void setComment(String comment) {
+				this.comment = comment;
+			}
 		}
 
-		public static class Field extends AnonNameHaver implements ILoweredData, IOwnsType, IHasTypeName {
+		public static class Field extends AnonNameHaver implements ILoweredData, IOwnsType, IHasTypeName, IHasComment {
 			public String typeName;
 			public String baseType;
 			public TypeDef ownedType;
@@ -507,6 +517,7 @@ public class import_df_structures extends GhidraScript {
 			public Field item;
 			public String indexEnum;
 			public boolean forceEnumSize;
+			public String comment = "";
 
 			@Override
 			public void setMeta(String meta) {
@@ -534,16 +545,27 @@ public class import_df_structures extends GhidraScript {
 					this.ownedType = new TypeDef();
 				return this.ownedType;
 			}
+
+			@Override
+			public void setComment(String comment) {
+				this.comment = comment;
+			}
 		}
 
-		public static class VMethod extends AnonNameHaver implements IHasFields {
+		public static class VMethod extends AnonNameHaver implements IHasFields, IHasComment {
 			public final List<Field> arguments = new ArrayList<>();
 			public Field returnType;
 			public boolean isDestructor;
+			public String comment = "";
 
 			@Override
 			public List<Field> getFields() {
 				return arguments;
+			}
+
+			@Override
+			public void setComment(String comment) {
+				this.comment = comment;
 			}
 		}
 
@@ -554,6 +576,7 @@ public class import_df_structures extends GhidraScript {
 		public String meta = "";
 		@SuppressWarnings("unused")
 		public String subtype = "";
+		public String comment = "";
 		public boolean isUnion;
 		public boolean hasSubClasses;
 		public final List<Field> fields = new ArrayList<>();
@@ -587,6 +610,11 @@ public class import_df_structures extends GhidraScript {
 		@Override
 		public List<Field> getFields() {
 			return fields;
+		}
+		
+		@Override
+		public void setComment(String comment) {
+			this.comment = comment;
 		}
 
 		public int enumRequiredBits() {
@@ -878,7 +906,7 @@ public class import_df_structures extends GhidraScript {
 							// ignore
 							break;
 						case "comment":
-							// ignore (for now)
+							((IHasComment) stack.peek()).setComment(reader.getAttributeValue(i));
 							break;
 						case "init-value":
 							// ignore
