@@ -515,7 +515,8 @@ public class import_df_structures extends GhidraScript {
 			}
 		}
 
-		public static class Field extends AnonNameHaver implements ILoweredData, IOwnsType, IHasTypeName, IHasComment, IHasInitValue {
+		public static class Field extends AnonNameHaver 
+		implements ILoweredData, IOwnsType, IHasTypeName, IHasComment, IHasInitValue {
 			public String typeName;
 			public String baseType;
 			public TypeDef ownedType;
