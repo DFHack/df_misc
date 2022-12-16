@@ -450,6 +450,10 @@ public class import_df_structures extends GhidraScript {
 		void setComment(String comment);
 		String getComment();
 	}
+	
+	private interface IHasInitValue {
+		void setInitValue(String initValue);
+	}
 
 	private static abstract class NameHaver implements IHasName {
 		public boolean hasName;
@@ -511,7 +515,7 @@ public class import_df_structures extends GhidraScript {
 			}
 		}
 
-		public static class Field extends AnonNameHaver implements ILoweredData, IOwnsType, IHasTypeName, IHasComment {
+		public static class Field extends AnonNameHaver implements ILoweredData, IOwnsType, IHasTypeName, IHasComment, IHasInitValue {
 			public String typeName;
 			public String baseType;
 			public TypeDef ownedType;
@@ -524,6 +528,7 @@ public class import_df_structures extends GhidraScript {
 			public String indexEnum;
 			public boolean forceEnumSize;
 			public String comment = "";
+			public String initValue = "";
 
 			@Override
 			public void setMeta(String meta) {
@@ -559,7 +564,17 @@ public class import_df_structures extends GhidraScript {
 
 			@Override
 			public String getComment() {
-				return this.comment;
+				// Append initValue if appropriate.
+				if (this.initValue == null || this.initValue.equals("")) {
+					return this.comment;
+				}
+				
+				return this.comment + " (init-value: " + this.initValue + ")";
+			}
+			
+			@Override
+			public void setInitValue(String initValue) {
+				this.initValue = initValue;
 			}
 		}
 
@@ -931,7 +946,7 @@ public class import_df_structures extends GhidraScript {
 							((IHasComment) stack.peek()).setComment(reader.getAttributeValue(i));
 							break;
 						case "init-value":
-							// ignore
+							((IHasInitValue) stack.peek()).setInitValue(reader.getAttributeValue(i));
 							break;
 						case "count":
 							((TypeDef.Field) stack.peek()).hasCount = true;
