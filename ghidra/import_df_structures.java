@@ -1153,7 +1153,7 @@ public class import_df_structures extends GhidraScript {
 			monitor.setProgress(i);
 		}
 	}
-	
+
 	private void findAnonymousTypes(List<TypeDef> toAdd, TypeDef parent) throws Exception {
 		var prefix = parent.getName() + "__SCOPE__";
 		for (var field : parent.fields) {
@@ -1611,8 +1611,8 @@ public class import_df_structures extends GhidraScript {
 
 		var ut = new UnionDataType(typeName);
 		dtc.addDataType(ut, DataTypeConflictHandler.REPLACE_HANDLER);
-		ut.add(createDataType(t), t.getName(), t.getName());
-		addDescriptionToDataType(ut, t);
+		ut.add(createDataType(t), t.getName(), t.getComment());
+
 		return (Union) createDataType(dtc, ut);
 	}
 
@@ -1622,7 +1622,7 @@ public class import_df_structures extends GhidraScript {
 
 		var self = t.hasSubClasses ? findOrCreateBaseClassUnion(t) : st;
 		var parent = findOrCreateBaseClassUnion(codegen.typesByName.get(t.inheritsFrom));
-		parent.add(self);
+		parent.add(self, t.getName(), t.getComment());
 	}
 
 	private DataType createClassDataType(TypeDef t) throws Exception {
@@ -1639,6 +1639,7 @@ public class import_df_structures extends GhidraScript {
 		st.setPackingEnabled(true);
 
 		addToBaseClassUnion(t, st);
+		addDescriptionToDataType(st, t);
 
 		return st;
 	}
