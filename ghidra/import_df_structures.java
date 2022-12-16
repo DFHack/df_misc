@@ -1649,7 +1649,7 @@ public class import_df_structures extends GhidraScript {
 							continue;
 						}
 
-						et.add(name + "_" + e.getName(v), mask * v);
+						et.add(name + "_" + e.getName(v), mask * v, f.getComment());
 					}
 				}
 
