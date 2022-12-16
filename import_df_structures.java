@@ -447,6 +447,7 @@ public class import_df_structures extends GhidraScript {
 	
 	private interface IHasComment {
 		void setComment(String comment);
+		String getComment();
 	}
 
 	private static abstract class NameHaver implements IHasName {
@@ -502,6 +503,11 @@ public class import_df_structures extends GhidraScript {
 			public void setComment(String comment) {
 				this.comment = comment;
 			}
+
+			@Override
+			public String getComment() {
+				return this.comment;
+			}
 		}
 
 		public static class Field extends AnonNameHaver implements ILoweredData, IOwnsType, IHasTypeName, IHasComment {
@@ -549,6 +555,11 @@ public class import_df_structures extends GhidraScript {
 			public void setComment(String comment) {
 				this.comment = comment;
 			}
+
+			@Override
+			public String getComment() {
+				return this.comment;
+			}
 		}
 
 		public static class VMethod extends AnonNameHaver implements IHasFields, IHasComment {
@@ -565,6 +576,11 @@ public class import_df_structures extends GhidraScript {
 			@Override
 			public void setComment(String comment) {
 				this.comment = comment;
+			}
+
+			@Override
+			public String getComment() {
+				return this.comment;
 			}
 		}
 
@@ -616,6 +632,11 @@ public class import_df_structures extends GhidraScript {
 			this.comment = comment;
 		}
 
+		@Override
+		public String getComment() {
+			return this.comment;
+		}
+		
 		public int enumRequiredBits() {
 			if (enumItemsMin == 0 && enumItemsMax == 0) {
 				long prevValue = -1;
@@ -642,6 +663,7 @@ public class import_df_structures extends GhidraScript {
 			}
 			return (int) requiredBits;
 		}
+
 	}
 
 	private static class Symbols {
@@ -1113,7 +1135,7 @@ public class import_df_structures extends GhidraScript {
 			monitor.setProgress(i);
 		}
 	}
-
+	
 	private void findAnonymousTypes(List<TypeDef> toAdd, TypeDef parent) throws Exception {
 		var prefix = parent.getName() + "__SCOPE__";
 		for (var field : parent.fields) {
@@ -1337,6 +1359,22 @@ public class import_df_structures extends GhidraScript {
 
 		return createDataType(dtc, bitArrayDataType);
 	}
+	
+	// Set a DataType's description based on its corresponding IHasComment implementation's comment field
+	private void addDescriptionToDataType(DataType dt, IHasComment tHasComment) throws Exception {
+		String comment = tHasComment.getComment();
+		if (comment == null || comment.isEmpty()) {
+			return;
+		}
+		
+		try {
+			dt.setDescription(comment);
+			debugln("Set description '" + comment + "' on " + dt.getName() + " DataType");
+		} catch (UnsupportedOperationException exception) {
+			printerr("Couldn't set description '" + comment + "' on " + dt.getName() + " DataType");
+			printerr(exception.getMessage());
+		}
+	}
 
 	private DataType createArrayDataType(DataType item, int count, String indexEnumName) throws Exception {
 		if (indexEnumName == null) {
@@ -1378,10 +1416,11 @@ public class import_df_structures extends GhidraScript {
 		dt.setToDefaultAligned();
 		dt.setPackingEnabled(true);
 		for (int i = 0; i < count; i++) {
+			String indexEnumComment = i < indexEnum.enumItems.size() ? indexEnum.enumItems.get(i).getComment() : null;
 			if (names[i] == null) {
-				dt.add(item, indexEnumName + "_anon_" + i, null);
+				dt.add(item, indexEnumName + "_anon_" + i, indexEnumComment);
 			} else {
-				dt.add(item, names[i], null);
+				dt.add(item, names[i], indexEnumComment);
 			}
 		}
 		return dtc.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
@@ -1394,9 +1433,11 @@ public class import_df_structures extends GhidraScript {
 		for (var ei : t.enumItems) {
 			long value = ei.hasValue ? ei.value : prevValue + 1;
 			String key = ei.hasName ? ei.name : "_unk_" + value;
-			et.add(key, value);
+			et.add(key, value, ei.getComment());
 			prevValue = value;
 		}
+		
+		addDescriptionToDataType(et, t);
 
 		return createDataType(dtcEnums, et);
 	}
@@ -1408,7 +1449,7 @@ public class import_df_structures extends GhidraScript {
 		else if (f.hasAnonName)
 			name = t.typeName + "_" + f.anonName;
 
-		st.add(getDataType(f), f.size, name, null);
+		st.add(getDataType(f), f.size, name, f.getComment());
 	}
 
 	private void addStructFields(Composite st, TypeDef t) throws Exception {
@@ -1436,7 +1477,7 @@ public class import_df_structures extends GhidraScript {
 		st.setToDefaultAligned();
 		st.setPackingEnabled(true);
 
-
+		addDescriptionToDataType(st, t);
 		addStructFields(st, t);
 
 		return createDataType(dtc, st);
@@ -1463,6 +1504,7 @@ public class import_df_structures extends GhidraScript {
 			args[i + 1] = new ParameterDefinitionImpl(aname, getDataType(arg), null);
 		}
 		ft.setArguments(args);
+		ft.setComment(vm.getComment());
 
 		return createDataType(dtcVMethods, ft);
 	}
@@ -1479,7 +1521,7 @@ public class import_df_structures extends GhidraScript {
 		st.setPackingEnabled(true);
 
 		if (t.inheritsFrom != null) {
-			st.add(createVTableDataType(codegen.typesByName.get(t.inheritsFrom)), "_super", null);
+			st.add(createVTableDataType(codegen.typesByName.get(t.inheritsFrom)), "_super", t.getComment());
 		}
 
 		for (var vm : t.vmethods) {
@@ -1489,8 +1531,8 @@ public class import_df_structures extends GhidraScript {
 				if (baseClassPadding == 1) {
 					// GCC
 					var mt = dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm));
-					st.add(mt, mname, null);
-					st.add(mt, mname + "(deleting)", null);
+					st.add(mt, mname, vm.getComment());
+					st.add(mt, mname + "(deleting)", vm.getComment());
 				} else {
 					// MSVC
 					if (vm.arguments.isEmpty()) {
@@ -1502,7 +1544,7 @@ public class import_df_structures extends GhidraScript {
 						vm.arguments.add(arg);
 					}
 					var mt = dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm));
-					st.add(mt, mname, null);
+					st.add(mt, mname, vm.getComment());
 				}
 				continue;
 			}
@@ -1511,10 +1553,13 @@ public class import_df_structures extends GhidraScript {
 				mname = vm.name;
 			else if (vm.hasAnonName)
 				mname = t.getName() + "_" + vm.anonName;
-			st.add(dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm)), mname, null);
+			st.add(dtm.getPointer(createMethodDataType(t.getName() + "::" + mname, t, vm)), mname, vm.getComment());
 		}
 
-		return createDataType(dtcVTables, st);
+		DataType vTableDT = createDataType(dtcVTables, st);
+		addDescriptionToDataType(vTableDT, t);
+		
+		return vTableDT;
 	}
 
 	private Union findOrCreateBaseClassUnion(TypeDef t) throws Exception {
@@ -1525,7 +1570,8 @@ public class import_df_structures extends GhidraScript {
 
 		var ut = new UnionDataType(typeName);
 		dtc.addDataType(ut, DataTypeConflictHandler.REPLACE_HANDLER);
-		ut.add(createDataType(t), t.getName(), null);
+		ut.add(createDataType(t), t.getName(), t.getName());
+		addDescriptionToDataType(ut, t);
 		return (Union) createDataType(dtc, ut);
 	}
 
@@ -1600,7 +1646,10 @@ public class import_df_structures extends GhidraScript {
 			mask = mask << 1;
 		}
 
-		return createDataType(dtc, et);
+		DataType bitFieldDT = createDataType(dtc, et);
+		addDescriptionToDataType(bitFieldDT, t);
+		
+		return bitFieldDT;
 	}
 
 	private void cleanOverlappingData(Data data) throws Exception {
