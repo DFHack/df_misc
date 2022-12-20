@@ -1081,6 +1081,7 @@ public class import_df_structures extends GhidraScript {
 		int i = 0;
 		for (var t : codegen.types) {
 			monitor.checkCanceled();
+			monitor.setMessage("Creating data types ("+ t.getName() +")...");
 			createDataType(t);
 			i++;
 			monitor.setProgress(i);
