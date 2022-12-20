@@ -1457,11 +1457,15 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createVTableDataType(TypeDef t) throws Exception {
-		var existing = dtcVTables.getDataType("vtable_" + t.getName());
-		if (existing != null)
-			return existing;
+		var vtName = "vtable_" + t.getName();
+		if (createdTypes.contains(vtName)) {
+			var existing = dtcVTables.getDataType(vtName);
+			if (existing != null)
+				return existing;
+		}
+		createdTypes.add(vtName);
 
-		Structure st = new StructureDataType("vtable_" + t.getName(), 0);
+		Structure st = new StructureDataType(vtName, 0);
 		// add early to avoid recursion
 		st = (Structure) dtcVTables.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAligned();
@@ -1508,9 +1512,12 @@ public class import_df_structures extends GhidraScript {
 
 	private Union findOrCreateBaseClassUnion(TypeDef t) throws Exception {
 		var typeName = "virtual_" + t.getName();
-		var existing = (Union) dtc.getDataType(typeName);
-		if (existing != null)
-			return existing;
+		if (createdTypes.contains(typeName)) {
+			var existing = (Union) dtc.getDataType(typeName);
+			if (existing != null)
+				return (Union) existing;
+		}
+		createdTypes.add(typeName);
 
 		var ut = new UnionDataType(typeName);
 		dtc.addDataType(ut, DataTypeConflictHandler.REPLACE_HANDLER);
