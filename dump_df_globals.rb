@@ -22,15 +22,15 @@ Dfhack_names = {
 	"title2" => "title_spaced",
 	"event_flow" => "flows",
 	"plot_event" => "timed_events",
-	"plotinfo" => "ui",
-	"adventure" => "ui_advmode",
-	"buildreq" => "ui_build_selector",
+#	"plotinfo" => "ui",
+#	"adventure" => "ui_advmode",
+#	"buildreq" => "ui_build_selector",
 	"buildjob_type" => "ui_building_assign_type",
 	"buildjob_selected" => "ui_building_assign_is_marked",
 	"buildjob_unit" => "ui_building_assign_units",
 	"buildjob_item" => "ui_building_assign_items",
 	"looklist" => "ui_look_list",
-	"game" => "ui_sidebar_menus",
+#	"game" => "ui_sidebar_menus",
 	"year" => "cur_year",
 	"season_count" => "cur_year_tick",
 	"precise_phase" => "cur_year_tick_advmode",
@@ -170,6 +170,7 @@ Dfhack_noname = {
 	'mt_virtual_buffer' => true,
 	'mt_buffer' => true,
 	'mt_virtual_seed_type' => true,
+	'game.external_flag' => true,
 }
 
 def dfhack_names(n)
