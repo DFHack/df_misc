@@ -130,7 +130,7 @@ public class import_df_structures extends GhidraScript {
 		var ptr = dtm.getPointer(target);
 
 		// this code was a workaround for a defect in ghidra 9 which has been fixed in ghidra 10
-		
+
 		/*
 		if (target instanceof Pointer) {
 			var base = ((Pointer) target).getDataType();
@@ -147,7 +147,7 @@ public class import_df_structures extends GhidraScript {
 		var vec = new StructureDataType(name, 0);
 		vec.setToDefaultAligned();
 		vec.setPackingEnabled(true);
-		
+
 		vec.add(ptr, "_M_start", null);
 		vec.add(ptr, "_M_finish", null);
 		vec.add(ptr, "_M_end_of_storage", null);
@@ -160,6 +160,59 @@ public class import_df_structures extends GhidraScript {
 			target = DataType.DEFAULT;
 
 		var name = "set<" + target.getName() + ">";
+		var existing = dtcStd.getDataType(name);
+		if (existing != null && !existing.isNotYetDefined())
+			return existing;
+
+		Structure node = new StructureDataType("_Rb_tree_node<" + target.getName() + ">", 0);
+		node.setToDefaultAligned();
+		node.setPackingEnabled(true);
+		node = (Structure) createDataType(dtcStd, node);
+
+		var set = new StructureDataType(name, 0);
+		set.setToDefaultAligned();
+		set.setPackingEnabled(true);
+
+		if (baseClassPadding == 1) {
+			// GCC
+
+			set.add(Undefined1DataType.dataType, "_M_key_compare", null);
+
+			Structure nodeBase = new StructureDataType("_Rb_tree_node_base<" + target.getName() + ">", 0);
+			nodeBase.setToDefaultAligned();
+			nodeBase.setPackingEnabled(true);
+			nodeBase = (Structure) createDataType(dtcStd, nodeBase);
+			nodeBase.add(BooleanDataType.dataType, "_M_color", null);
+			nodeBase.add(dtm.getPointer(node), "_M_parent", null);
+			nodeBase.add(dtm.getPointer(node), "_M_left", null);
+			nodeBase.add(dtm.getPointer(node), "_M_right", null);
+			node.add(nodeBase, "_M_base", null);
+
+			set.add(nodeBase, "_M_header", null);
+		} else {
+			// MSVC
+
+			node.add(dtm.getPointer(node), "_Left", null);
+			node.add(dtm.getPointer(node), "_Parent", null);
+			node.add(dtm.getPointer(node), "_Right", null);
+			node.add(BooleanDataType.dataType, "_Color", null);
+			node.add(BooleanDataType.dataType, "_Isnil", null);
+
+			set.add(dtm.getPointer(node), "_Myhead", null);
+		}
+
+		node.add(target, "_M_value_field", null);
+
+		set.add(dtSizeT, "_M_node_count", null);
+
+		return createDataType(dtcStd, set);
+	}
+
+	private DataType createMapType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+
+		var name = "map<" + target.getName() + ">";
 		var existing = dtcStd.getDataType(name);
 		if (existing != null && !existing.isNotYetDefined())
 			return existing;
@@ -258,7 +311,7 @@ public class import_df_structures extends GhidraScript {
 		fStreamDataType.setPackingEnabled(true);
 		dequeDataType.setToDefaultAligned();
 		dequeDataType.setPackingEnabled(true);
-		
+
 		boolean isElf = false;
 		switch (currentProgram.getExecutableFormat()) {
 		case "Executable and Linking Format (ELF)":
@@ -445,12 +498,12 @@ public class import_df_structures extends GhidraScript {
 	private interface IHasFields {
 		List<TypeDef.Field> getFields();
 	}
-	
+
 	private interface IHasComment {
 		void setComment(String comment);
 		String getComment();
 	}
-	
+
 	private interface IHasInitValue {
 		void setInitValue(String initValue);
 	}
@@ -503,7 +556,7 @@ public class import_df_structures extends GhidraScript {
 	private static class TypeDef implements ILoweredData, IOwnsType, IHasFields, IHasComment {
 		public static class EnumItem extends NameValueHaver implements IHasComment {
 			public String comment;
-			
+
 			@Override
 			public void setComment(String comment) {
 				this.comment = comment;
@@ -515,7 +568,7 @@ public class import_df_structures extends GhidraScript {
 			}
 		}
 
-		public static class Field extends AnonNameHaver 
+		public static class Field extends AnonNameHaver
 		implements ILoweredData, IOwnsType, IHasTypeName, IHasComment, IHasInitValue {
 			public String typeName;
 			public String baseType;
@@ -569,10 +622,10 @@ public class import_df_structures extends GhidraScript {
 				if (this.initValue == null || this.initValue.equals("")) {
 					return this.comment;
 				}
-				
+
 				return this.comment + " (init-value: " + this.initValue + ")";
 			}
-			
+
 			@Override
 			public void setInitValue(String initValue) {
 				this.initValue = initValue;
@@ -643,7 +696,7 @@ public class import_df_structures extends GhidraScript {
 		public List<Field> getFields() {
 			return fields;
 		}
-		
+
 		@Override
 		public void setComment(String comment) {
 			this.comment = comment;
@@ -653,7 +706,7 @@ public class import_df_structures extends GhidraScript {
 		public String getComment() {
 			return this.comment;
 		}
-		
+
 		public int enumRequiredBits() {
 			if (enumItemsMin == 0 && enumItemsMax == 0) {
 				long prevValue = -1;
@@ -1208,7 +1261,7 @@ public class import_df_structures extends GhidraScript {
 		}
 
 		createdTypes.add(t.getName());
-		
+
 		DataType n;
 		switch (t.meta) {
 		case "bitfield-type":
@@ -1239,7 +1292,7 @@ public class import_df_structures extends GhidraScript {
 			if (existing != null)
 				return existing;
 		}
-		
+
 		createdTypes.add(t.getName());
 
 		if (size == 0) {
@@ -1279,6 +1332,8 @@ public class import_df_structures extends GhidraScript {
 				return dtVectorBool;
 			case "stl-set":
 				return createSetType(f.item == null ? null : getDataType(f.item));
+			case "stl-map":
+				return createMapType(f.item == null ? null : getDataType(f.item));
 			case "stl-deque":
 				return dtcStd.addDataType(new TypedefDataType(
 						"deque<" + (f.item == null ? DataType.DEFAULT : getDataType(f.item)).getName() + ">", dtDeque),
@@ -1393,14 +1448,14 @@ public class import_df_structures extends GhidraScript {
 
 		return createDataType(dtc, bitArrayDataType);
 	}
-	
+
 	// Set a DataType's description based on its corresponding IHasComment implementation's comment field
 	private void addDescriptionToDataType(DataType dt, IHasComment tHasComment) throws Exception {
 		String comment = tHasComment.getComment();
 		if (comment == null || comment.isEmpty()) {
 			return;
 		}
-		
+
 		try {
 			dt.setDescription(comment);
 			debugln("Set description '" + comment + "' on " + dt.getName() + " DataType");
@@ -1470,7 +1525,7 @@ public class import_df_structures extends GhidraScript {
 			et.add(key, value, ei.getComment());
 			prevValue = value;
 		}
-		
+
 		addDescriptionToDataType(et, t);
 
 		return createDataType(dtcEnums, et);
@@ -1596,7 +1651,7 @@ public class import_df_structures extends GhidraScript {
 
 		DataType vTableDT = createDataType(dtcVTables, st);
 		addDescriptionToDataType(vTableDT, t);
-		
+
 		return vTableDT;
 	}
 
@@ -1690,7 +1745,7 @@ public class import_df_structures extends GhidraScript {
 
 		DataType bitFieldDT = createDataType(dtc, et);
 		addDescriptionToDataType(bitFieldDT, t);
-		
+
 		return bitFieldDT;
 	}
 
@@ -1717,15 +1772,15 @@ public class import_df_structures extends GhidraScript {
 					+ (syms.length > 0 ? syms[0].getName() : "(unnamed)"));
 		}
 	}
-	
+
 	private void cleanExistingData(Address addr, DataType dt) throws Exception {
 		var listing = currentProgram.getListing();
-		
+
 		// If data is zero length, we don't need to check (probably)
 		if (dt.isZeroLength()) {
 			return;
 		}
-		
+
 		// Need to check if the area of data we want to label is already defined within the listing database
 		// First, we check for overlapping data that starts before our data's first address
 		// Like so:
@@ -1747,7 +1802,7 @@ public class import_df_structures extends GhidraScript {
 		// Secondly, we check for overlapping data that begins within our data's range
 		// Like so:
 		// | New Data |
-		//       | Old Data |		
+		//       | Old Data |
 		DataIterator forwardsDataIt = listing.getData(addr, true);
 		Address maxAddr = addr.add(dt.getLength());
 		while (forwardsDataIt.hasNext()) {
@@ -1765,7 +1820,7 @@ public class import_df_structures extends GhidraScript {
 	private Data labelData(Address addr, DataType dt, String name, int size) throws Exception {
 		debugln("labelling " + addr + " as " + name + " (" + dt.getCategoryPath().getName() + "::" + dt.getName()
 				+ ") ");
-		
+
 		cleanExistingData(addr, dt);
 		var listing = currentProgram.getListing();
 		Data data = null;
