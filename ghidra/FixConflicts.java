@@ -25,7 +25,7 @@ import ghidra.program.model.scalar.*;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.address.*;
 
-public class FixConflictsScript extends GhidraScript {
+public class FixConflicts extends GhidraScript {
 
 	static int maxPerRun = 100;
 
