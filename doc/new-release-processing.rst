@@ -2,9 +2,9 @@ Basic process for processing a new DF release
 
 * obtain release versions
 
- * steam (use steam client)
- * itch (download from store)
- * classic (download from bay12)
+  * steam (use steam client)
+  * itch (download from store)
+  * classic (download from bay12)
 
 * for each release edition, construct symbols stanza and add to `symbols.xml`
 
