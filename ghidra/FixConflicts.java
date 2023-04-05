@@ -27,17 +27,22 @@ import ghidra.program.model.address.*;
 
 public class FixConflicts extends GhidraScript {
 
-	static int maxPerRun = 100;
+	static int maxPerRun = 50;
 
 	@Override
 	protected void run() throws Exception {
+		boolean rerun = false;
 		DataTypeManager dtm = currentProgram.getDataTypeManager();
+		do {
 		List<DataType> conflicts = CollectionUtils.asStream(dtm.getAllDataTypes())
 			.filter(dt -> dt.getName().contains(".conflict"))
 			.collect(Collectors.toList());
 		int orig = conflicts.size();
-		if (conflicts.size() > maxPerRun)
+		rerun = false;
+		if (conflicts.size() > maxPerRun) {
 			conflicts = conflicts.subList(0,maxPerRun);
+			rerun = true;
+		}
 		String message = "Fixing Conflicts " + String.valueOf(conflicts.size()) + " of " + String.valueOf(orig);
 		println(message);
 		int id = dtm.startTransaction("Fixing Conflicts");
@@ -71,6 +76,7 @@ public class FixConflicts extends GhidraScript {
 		} finally {
 			dtm.endTransaction(id, success);
 		}
+		} while (rerun);
 	}
 
 }
