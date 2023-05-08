@@ -2007,8 +2007,6 @@ public class import_df_structures extends GhidraScript {
 		globalTableEntryType.setPackingEnabled(true);
 		globalTableEntryType.add(stringPointer, "name", "");
 		globalTableEntryType.add(voidPointer, "addr", "");
-		globalTableEntryType = (Structure) dtc.addDataType(globalTableEntryType,
-				DataTypeConflictHandler.REPLACE_HANDLER);
 
 		Structure globalTableType = new StructureDataType("global_variable_table", 0);
 		globalTableType.setToDefaultAligned();
@@ -2025,21 +2023,45 @@ public class import_df_structures extends GhidraScript {
 			magic = new byte[] { 0x78, 0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12, 0x21, 0x43, 0x65, (byte) 0x87, 0x21,
 					0x43, 0x65, (byte) 0x87 };
 		}
-		globalTableType = (Structure) dtc.addDataType(globalTableType, DataTypeConflictHandler.REPLACE_HANDLER);
+
+		boolean isExtended = false;
 
 		var mem = currentProgram.getMemory();
 		var start = mem.findBytes(mem.getMinAddress(), magic, null, true, monitor);
+
+		if (currentProgram.getDefaultPointerSize() == 8) {
+			long extended_check = mem.getLong(start.addNoWrap(16));
+			if (extended_check == 0x89abcdef89abcdefL)
+			{
+				println("extended global table detected");
+				isExtended = true;
+
+				globalTableType.add(DWordDataType.dataType, "magic5", "89abcdefh");
+				globalTableType.add(DWordDataType.dataType, "magic6", "89abcdefh");
+
+				globalTableEntryType.add(DWordDataType.dataType, "length", "");
+			}
+		}
+
+		globalTableEntryType = (Structure) dtc.addDataType(globalTableEntryType,
+				DataTypeConflictHandler.REPLACE_HANDLER);
+		globalTableType = (Structure) dtc.addDataType(globalTableType, DataTypeConflictHandler.REPLACE_HANDLER);
+
 		var addr = start;
 		while (true) {
 			monitor.checkCanceled();
 			addr = addr.addNoWrap(globalTableEntryType.getLength());
 			long nameAddr = mem.getLong(addr);
 			long dataAddr;
+			long dataLength;
 			if (currentProgram.getDefaultPointerSize() == 4) {
 				dataAddr = nameAddr >>> 32;
 				nameAddr = nameAddr & 0xffffffffL;
 			} else {
 				dataAddr = mem.getLong(addr.addNoWrap(8));
+				if (isExtended) {
+					dataLength = mem.getLong(addr.addNoWrap(16));
+				}
 			}
 
 			if (nameAddr == 0) {

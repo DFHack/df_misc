@@ -211,7 +211,18 @@ end
 
 $stderr.puts "Global table starts at #{Metasm::Expression[table_start]}"
 
-off = table_start + 2*bits/8
+extended = false
+
+if bits == 64
+	MAGIC3 = "\xef\xcd\xab\x89"
+	MAGIC3.force_encoding('BINARY') rescue nil
+	extended = (dasm.read_raw_data(table_start + 16, 8) == MAGIC3 + MAGIC3)
+	$stderr.puts "Extended global table detected" if extended
+end
+
+elems = extended ? 3 : 2
+
+off = table_start + elems*bits/8
 
 global = {}
 
@@ -220,6 +231,10 @@ while true
 	off += bits/8
 	ptr_var = dasm.decode_dword(off)
 	off += bits/8
+	if extended
+		size = dasm.decode_dword(off)
+		off += bits/8
+	end
 	break if ptr_str == 0
 	name = dasm.decode_strz(ptr_str)
 	global[ptr_var] = name
