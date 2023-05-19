@@ -82,7 +82,8 @@ end
 
 
 # regexp to match class names from the binary
-vclass_names = ['\w+st', 'renderer(_\w+)?', '\w*Screen\w*']
+# note that '@widgets' only works for msvc mangling and something different may be needed for gcc
+vclass_names = ['\w+st', 'renderer(_\w+)?', '\w*Screen\w*', '\w+@widgets']
 vclass_names_re = '(' + vclass_names.join('|') + ')'
 
 strings = {}
@@ -107,7 +108,7 @@ if dasm.program.shortname == 'coff'
 	# mangled_classname_ptr+8 db ".?AVbuilding_bedst@@"
 
 	# .?AVclassst@@ / .?AUstructst@@
-	
+
 	# MSVC2015 x64 vtable:
 	# vtable-8     dq typeinfoptr
 	#
@@ -127,7 +128,8 @@ if dasm.program.shortname == 'coff'
 	}
 
 	def demangle_str(s)
-		s[4, s.length-6]
+		t = s[4, s.length-6]
+		t.gsub(/(\w+)@widgets/, 'widget_\1')
 	end
 
 	classname_offset = 0xc
