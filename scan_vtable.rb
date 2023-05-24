@@ -129,7 +129,7 @@ if dasm.program.shortname == 'coff'
 
 	def demangle_str(s)
 		t = s[4, s.length-6]
-		t.gsub(/(\w+)@widgets/, 'widget_\1')
+		t.gsub(/(\w+)@widgets/, 'widgets::\1')
 	end
 
 	classname_offset = 0xc
