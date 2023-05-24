@@ -32,6 +32,7 @@ import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.SystemUtilities;
 import ghidra.util.task.TaskMonitor;
+import ghidra.util.Swing;
 
 public class import_df_structures extends GhidraScript {
 	private static boolean DEBUG_ENABLED = !SystemUtilities.isInReleaseMode();
@@ -1204,6 +1205,7 @@ public class import_df_structures extends GhidraScript {
 			createDataType(t);
 			i++;
 			monitor.setProgress(i);
+			Swing.allowSwingToProcessEvents();
 		}
 	}
 
@@ -1926,6 +1928,7 @@ public class import_df_structures extends GhidraScript {
 		int i = 0;
 		for (var vt : symbolTable.vtables) {
 			monitor.setProgress(i++);
+			Swing.allowSwingToProcessEvents();
 
 			if (!vt.hasName)
 				continue;
@@ -1982,6 +1985,7 @@ public class import_df_structures extends GhidraScript {
 		int i = 0;
 		for (var gobj : codegen.globals) {
 			monitor.setProgress(i++);
+			Swing.allowSwingToProcessEvents();
 
 			if (!gobj.hasName)
 				continue;
