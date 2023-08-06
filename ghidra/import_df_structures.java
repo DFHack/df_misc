@@ -80,14 +80,6 @@ public class import_df_structures extends GhidraScript {
 		labelGlobals();
 		annotateGlobalTable();
 		cleanUpDemangler();
-
-		// updateProgressMajor("Waiting for auto analysis...");
-		// var am = AutoAnalysisManager.getAnalysisManager(currentProgram);
-		// am.setIgnoreChanges(false); // change from SUSPENDED to ENABLED mode
-		// am.reAnalyzeAll(null); // force full program analysis
-		// am.waitForAnalysis(AnalysisPriority.CODE_ANALYSIS.priority(), monitor);
-
-		// setThunkNamespaces();
 	}
 
 	private void updateProgressMajor(String message) throws Exception {
@@ -368,16 +360,15 @@ public class import_df_structures extends GhidraScript {
 			dequeDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			dequeDataType.add(Undefined.getUndefinedDataType(10 * currentProgram.getDefaultPointerSize()));
 
-			// sizes for these types obtained using gcc 10.5 via godbolt, which only has gcc-x86 compilers for 64 bit
-			// thus this code will be _wrong_ for 32-bit compilers, although we probably don't care
+			// sizes for these types obtained using gcc 10.5 via godbolt
 			mutexDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
-			mutexDataType.add(Undefined.getUndefinedDataType(40)); // likely incorrect for 32 bit
+			mutexDataType.add((currentProgram.getDefaultPointerSize() == 8) ? 40 : 24);
 
 			conditionVariableDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
-			conditionVariableDataType.add(Undefined.getUndefinedDataType(48)); // likely incorrect for 32 bit
+			conditionVariableDataType.add(Undefined.getUndefinedDataType(48));
 
 			futureDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
-			futureDataType.add(Undefined.getUndefinedDataType(16)); // likely incorrect for 32 bit
+			futureDataType.add(Undefined.getUndefinedDataType(2 * currentProgram.getDefaultPointerSize()));
 
 			this.baseClassPadding = 1;
 
