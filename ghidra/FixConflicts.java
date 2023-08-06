@@ -46,6 +46,7 @@ public class FixConflicts extends GhidraScript {
 			String message = "Fixing " + String.valueOf(conflicts.size()) + " conflicts...";
 			println(message);
 			Instant start = Instant.now();
+			Instant lastSwing = Instant.now();
 			monitor.initialize(conflicts.size());
 			monitor.setMessage(message);
 			for (DataType dt : conflicts) {
@@ -69,7 +70,14 @@ public class FixConflicts extends GhidraScript {
 				}
 				dtm.replaceDataType(dt, good, false);
 				monitor.incrementProgress(1);
-				Swing.allowSwingToProcessEvents();
+
+				Duration swingElapsed = Duration.between(lastSwing, Instant.now());
+				if (swingElapsed.toMillis() > 1000)
+				{
+					Swing.allowSwingToProcessEvents();
+					lastSwing = Instant.now();
+				}
+
 				Duration elapsed = Duration.between(start, Instant.now());
 				if (elapsed.toMillis() > 60000)
 				{
