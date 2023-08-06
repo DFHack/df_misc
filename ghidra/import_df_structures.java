@@ -52,8 +52,8 @@ public class import_df_structures extends GhidraScript {
 	private Category dtc, dtcStd, dtcEnums, dtcVTables, dtcVMethods;
 	private DataType dtUint8, dtUint16, dtUint32, dtUint64;
 	private DataType dtInt8, dtInt16, dtInt32, dtInt64;
-	private DataType dtInt, dtLong, dtSizeT;
-	private DataType dtString, dtFStream, dtVectorBool, dtDeque;
+	private DataType dtInt, dtLong, dtULong, dtSizeT;
+	private DataType dtString, dtFStream, dtMutex, dtConditionVariable, dtFuture, dtVectorBool, dtDeque;
 	private Structure classTypeInfo, subClassTypeInfo, vmiClassTypeInfo;
 	private Address classVTable, subClassVTable, vmiClassVTable;
 	private int baseClassPadding;
@@ -81,13 +81,13 @@ public class import_df_structures extends GhidraScript {
 		annotateGlobalTable();
 		cleanUpDemangler();
 
-		updateProgressMajor("Waiting for auto analysis...");
-		var am = AutoAnalysisManager.getAnalysisManager(currentProgram);
-		am.setIgnoreChanges(false); // change from SUSPENDED to ENABLED mode
-		am.reAnalyzeAll(null); // force full program analysis
-		am.waitForAnalysis(AnalysisPriority.CODE_ANALYSIS.priority(), monitor);
+		// updateProgressMajor("Waiting for auto analysis...");
+		// var am = AutoAnalysisManager.getAnalysisManager(currentProgram);
+		// am.setIgnoreChanges(false); // change from SUSPENDED to ENABLED mode
+		// am.reAnalyzeAll(null); // force full program analysis
+		// am.waitForAnalysis(AnalysisPriority.CODE_ANALYSIS.priority(), monitor);
 
-		setThunkNamespaces();
+		// setThunkNamespaces();
 	}
 
 	private void updateProgressMajor(String message) throws Exception {
@@ -303,6 +303,9 @@ public class import_df_structures extends GhidraScript {
 		var stringDataType = new StructureDataType("string", 0);
 		var bitVecDataType = new StructureDataType("vector<bool>", 0);
 		var fStreamDataType = new StructureDataType("fstream", 0);
+		var mutexDataType = new StructureDataType("mutex", 0);
+		var conditionVariableDataType = new StructureDataType("conditionVariable", 0);
+		var futureDataType = new StructureDataType("future", 0);
 		var dequeDataType = new StructureDataType("deque", 0);
 		stringDataType.setToDefaultAligned();
 		stringDataType.setPackingEnabled(true);
@@ -310,6 +313,12 @@ public class import_df_structures extends GhidraScript {
 		bitVecDataType.setPackingEnabled(true);
 		fStreamDataType.setToDefaultAligned();
 		fStreamDataType.setPackingEnabled(true);
+		mutexDataType.setToDefaultAligned();
+		mutexDataType.setPackingEnabled(true);
+		conditionVariableDataType.setToDefaultAligned();
+		conditionVariableDataType.setPackingEnabled(true);
+		mutexDataType.setToDefaultAligned();
+		mutexDataType.setPackingEnabled(true);
 		dequeDataType.setToDefaultAligned();
 		dequeDataType.setPackingEnabled(true);
 
@@ -321,6 +330,9 @@ public class import_df_structures extends GhidraScript {
 		case "Mac OS X Mach-O":
 			this.dtLong = createDataType(dtcStd, "long",
 					AbstractIntegerDataType.getSignedDataType(currentProgram.getDefaultPointerSize(), dtm));
+
+			this.dtULong = createDataType(dtcStd, "ulong",
+					AbstractIntegerDataType.getUnsignedDataType(currentProgram.getDefaultPointerSize(), dtm));
 
 			var rep = new StructureDataType("_string_rep", 0);
 			rep.setToDefaultAligned();
@@ -355,6 +367,17 @@ public class import_df_structures extends GhidraScript {
 
 			dequeDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			dequeDataType.add(Undefined.getUndefinedDataType(10 * currentProgram.getDefaultPointerSize()));
+
+			// sizes for these types obtained using gcc 10.5 via godbolt, which only has gcc-x86 compilers for 64 bit
+			// thus this code will be _wrong_ for 32-bit compilers, although we probably don't care
+			mutexDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
+			mutexDataType.add(Undefined.getUndefinedDataType(40)); // likely incorrect for 32 bit
+
+			conditionVariableDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
+			conditionVariableDataType.add(Undefined.getUndefinedDataType(48)); // likely incorrect for 32 bit
+
+			futureDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
+			futureDataType.add(Undefined.getUndefinedDataType(16)); // likely incorrect for 32 bit
 
 			this.baseClassPadding = 1;
 
@@ -405,6 +428,7 @@ public class import_df_structures extends GhidraScript {
 			break;
 		case "Portable Executable (PE)":
 			this.dtLong = createDataType(dtcStd, "long", AbstractIntegerDataType.getSignedDataType(4, dtm));
+			this.dtULong = createDataType(dtcStd, "ulong", AbstractIntegerDataType.getUnsignedDataType(4, dtm));
 
 			var stringVal = new UnionDataType("_string_val");
 			stringVal.setToDefaultAligned();
@@ -425,6 +449,16 @@ public class import_df_structures extends GhidraScript {
 			dequeDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			dequeDataType.add(Undefined.getUndefinedDataType(5 * currentProgram.getDefaultPointerSize()));
 
+			// these sizes were obtained using msvc 19.36
+			mutexDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
+			mutexDataType.add(Undefined.getUndefinedDataType(8 * currentProgram.getDefaultPointerSize() + 16));
+
+			conditionVariableDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
+			conditionVariableDataType.add(Undefined.getUndefinedDataType(8 * currentProgram.getDefaultPointerSize() + 8));
+
+			futureDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
+			futureDataType.add(Undefined.getUndefinedDataType(2 * currentProgram.getDefaultPointerSize()));
+
 			this.baseClassPadding = currentProgram.getDefaultPointerSize();
 
 			break;
@@ -432,6 +466,9 @@ public class import_df_structures extends GhidraScript {
 			throw new Exception("unexpected exe format " + currentProgram.getExecutableFormat());
 		}
 		this.dtFStream = createDataType(dtcStd, fStreamDataType);
+		this.dtMutex = createDataType(dtcStd, mutexDataType);
+		this.dtConditionVariable = createDataType(dtcStd, conditionVariableDataType);
+		this.dtFuture = createDataType(dtcStd, futureDataType);
 		this.dtString = createDataType(dtcStd, stringDataType);
 		this.dtVectorBool = createDataType(dtcStd, bitVecDataType);
 		this.dtDeque = createDataType(dtcStd, dequeDataType);
@@ -1324,6 +1361,12 @@ public class import_df_structures extends GhidraScript {
 				return dtString;
 			case "stl-fstream":
 				return dtFStream;
+			case "stl-mutex":
+				return dtMutex;
+			case "stl-condition-variable":
+				return dtConditionVariable;
+			case "stl-future":
+				return dtFuture;
 			}
 			break;
 		case "container":
@@ -1374,6 +1417,10 @@ public class import_df_structures extends GhidraScript {
 				return dtUint64;
 			case "long":
 				return dtLong;
+			case "ulong":
+				return dtULong;
+			case "size_t":
+				return dtSizeT;
 			}
 			break;
 		case "pointer":
