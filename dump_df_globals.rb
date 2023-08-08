@@ -225,6 +225,7 @@ elems = extended ? 3 : 2
 off = table_start + elems*bits/8
 
 global = {}
+global[table_start] = 'global_table'
 
 while true
 	ptr_str = dasm.decode_dword(off)
