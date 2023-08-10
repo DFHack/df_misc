@@ -362,7 +362,7 @@ public class import_df_structures extends GhidraScript {
 
 			// sizes for these types obtained using gcc 10.5 via godbolt
 			mutexDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
-			mutexDataType.add((currentProgram.getDefaultPointerSize() == 8) ? 40 : 24);
+			mutexDataType.add(Undefined.getUndefinedDataType((currentProgram.getDefaultPointerSize() == 8) ? 40 : 24));
 
 			conditionVariableDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			conditionVariableDataType.add(Undefined.getUndefinedDataType(48));
