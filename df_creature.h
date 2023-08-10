@@ -85,7 +85,7 @@
 
     struct df_job_link {
         struct df_job *job;
-        struct df_job_link *prev;	// goes up to DwarfFortress.exe#.data
+        struct df_job_link *prev;    // goes up to DwarfFortress.exe#.data
         struct df_job_link *next;
     };
 
@@ -183,7 +183,7 @@
         uint32_t civ;           // 108
         uint32_t unk_10c;
         int32_t unk_110;
-        
+
         std::vector<uint32_t> unk_114;
         std::vector<uint32_t> unk_124;
         std::vector<uint32_t> unk_134;

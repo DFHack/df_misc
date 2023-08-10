@@ -57,8 +57,8 @@ static Unknown( ea, length )
 
 static DwordRel(x)
 {
-	x = Dword(x) + 0x140000000;
-	return x;
+    x = Dword(x) + 0x140000000;
+    return x;
 }
 
 static ForceQword( x ) {  //Make dword, undefine as needed
@@ -156,8 +156,8 @@ static matchBytes(addr,match)
 {
   auto i,len,s;
   len = strlen(match);
-  if (len%2) 
-  { 
+  if (len%2)
+  {
     Warning("Bad match string in matchBytes: %s",match);
     return 0;
   }
@@ -204,7 +204,7 @@ static CommentStack(start, offset, name, struc_id)
     l = l + GetFrameRegsSize(start);
   l = l+offset;
   if (l<0)
-  {    
+  {
     MakeFrame(start, -offset, GetFrameRegsSize(start), GetFrameArgsSize(start));
     l = 0;
   }
@@ -269,7 +269,7 @@ static MangleNumber(x)
   {
     sign = 1;
     x = -x;
-  }  
+  }
   if (x==0)
     return "A@";
   else if (x<=10)
@@ -556,7 +556,7 @@ static Parse_Vtable(a)
       MakeName(Qword(a-8),"??_R4"+s+"6B@");
     }
     else// if ((i&3)==1)
-    { 
+    {
       s2 = GetVtableClass(Qword(a-8));
       s2 = substr(s2,4,-1);
       s  = substr(s,4,-1);
@@ -648,13 +648,13 @@ static GetVtblName(col)
   i = DwordRel(col+16); //CHD
   i = Dword(i+4);  //Attributes
   if ((i&3)==0 && Dword(col+4)==0)
-  { 
+  {
     //Single inheritance, so we don't need to worry about duplicate names (several vtables)
     s=substr(s,4,-1);
     return "??_7"+s+"6B@";
   }
   else //if ((i&3)==1) //multiple inheritance
-  { 
+  {
     s2 = GetVtableClass(col);
     s2 = substr(s2,4,-1);
     s  = substr(s,4,-1);
@@ -692,7 +692,7 @@ static funcStart(ea)
 static AddAddr(ea)
 {
   auto id, idx, val;
-  
+
   if ( (id = GetArrayId("AddrList")) == -1 )
   {
     id  = CreateArray("AddrList");
@@ -769,8 +769,8 @@ static DoVtable(a)
   //check if it's named as a vtable
   name = Name(a);
   if (substr(name,0,4)!="??_7") name=0;
- 
-  x = Qword(a-8);  
+
+  x = Qword(a-8);
   //otherwise try to get it from RTTI
   if (IsValidCOL(x))
   {
@@ -790,11 +790,11 @@ static DoVtable(a)
     {
        p = funcStart(x);
        if (p!=-1)
-       { 
-         if (q==p) 
+       {
+         if (q==p)
            i++;
          else
-         {           
+         {
            if (q) {
              AddAddr(q);
            }
@@ -804,10 +804,10 @@ static DoVtable(a)
        }
     }
     if (q)
-    {           
+    {
        AddAddr(q);
     }
-    
+
     x = a;
     while (y>0)
     {
@@ -906,9 +906,9 @@ static checkSDD(x,name,vtable,gate)
     //F6 44 24 08 01                 test    [esp+arg_0], 1
     //74 07                          jz      short @@no_free
     //56                             push    esi
-    //                               
+    //
     //                           call operator delete();
-    
+
     //   @@no_free:
     //8B C6                          mov     eax, esi
     //5E                             pop     esi
@@ -930,9 +930,9 @@ static checkSDD(x,name,vtable,gate)
     //F6 44 24 08 01                 test    [esp+arg_0], 1
     //74 07                          jz      short @@no_free
     //56                             push    esi
-    //                               
+    //
     //                           call operator delete();
-    
+
     //   @@no_free:
     //8B C6                          mov     eax, esi
     //5E                             pop     esi
@@ -1010,7 +1010,7 @@ static checkSDD(x,name,vtable,gate)
     }
     t = SN_scalardtr;
   }
-  else if ((matchBytes(x,"F644240401568BF1C706") /*&& Dword(x+10)==vtable*/) || 
+  else if ((matchBytes(x,"F644240401568BF1C706") /*&& Dword(x+10)==vtable*/) ||
            (matchBytes(x,"8A442404568BF1A801C706") /*&& Dword(x+11)==vtable */) ||
            (matchBytes(x,"568BF1C706????????E8????????F64424080174") && matchBytes(x+21+Byte(x+20),"8BC65EC20400"))
           )
@@ -1033,10 +1033,10 @@ static checkSDD(x,name,vtable,gate)
     //   @@no_free:
     //8B C6                          mov     eax, esi
     //5E                             pop     esi
-    //C2 04 00                       retn    4  
+    //C2 04 00                       retn    4
     t = SN_scalardtr;
   }
-  else if (matchBytes(x,"538A5C2408568BF1F6C302742B8B46FC578D7EFC68????????506A??56E8") || 
+  else if (matchBytes(x,"538A5C2408568BF1F6C302742B8B46FC578D7EFC68????????506A??56E8") ||
            matchBytes(x,"538A5C2408F6C302568BF1742E8B46FC5768????????8D7EFC5068????????56E8"))
   {
      //53                            push    ebx

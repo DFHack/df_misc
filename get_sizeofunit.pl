@@ -314,4 +314,3 @@ my $doc = XML::LibXML->new()->parse_file($input);
 $global_types{$_->getAttribute('type-name')} = $_ foreach $doc->findnodes('/ld:data-definition/ld:global-type');
 
 print get_sizeof($global_types{$target_class}) . "\n";
-

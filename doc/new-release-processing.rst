@@ -21,4 +21,3 @@ Basic process for processing a new DF release
 
 * add new `symbols.xml` stanzas to versions to df-structures and commit
 * complete initial ghidra analysis on steam edition
-

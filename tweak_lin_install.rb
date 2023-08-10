@@ -7,8 +7,8 @@ Dir.chdir('data/init') unless File.exist?('announcements.txt')
 raw = File.read('announcements.txt')
 %w[DIG_CANCEL_WARM DIG_CANCEL_DAMP BIRTH_CITIZEN
 STRANGE_MOOD MADE_ARTIFACT NAMED_ARTIFACT ARTIFACT_BEGUN].each { |n|
-	# rm pause+focus on common events
-	raw.sub!("#{n}:A_D:D_D:P:R", "#{n}:A_D:D_D")
+    # rm pause+focus on common events
+    raw.sub!("#{n}:A_D:D_D:P:R", "#{n}:A_D:D_D")
 }
 File.open('announcements.txt', 'w') { |fd| fd.write raw }
 

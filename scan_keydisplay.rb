@@ -24,45 +24,45 @@ raise 'no "Tab"' if not tab or addrs.empty?
 # windows has 2 xrefs (ctor?), the bad one has no branches
 
 if defined? @osx_xref_getip
-	puts "getip %x" % @osx_xref_getip.first if $VERBOSE
-	dasm.disassemble_fast_deep @osx_xref_getip.first
+    puts "getip %x" % @osx_xref_getip.first if $VERBOSE
+    dasm.disassemble_fast_deep @osx_xref_getip.first
 end
 
 puts "Tab xrefs: #{addrs.map { |a| a.to_s(16) }.join(', ')}" if $VERBOSE
 
 keydisplay = []
 addrs.each { |addr|
-	dasm.disassemble_fast addr+4
+    dasm.disassemble_fast addr+4
 
-	# assume the 1st 'cmp' we'll encounter depends on keybinding+4
-	cmp = nil
+    # assume the 1st 'cmp' we'll encounter depends on keybinding+4
+    cmp = nil
 
-	b = dasm.block_including(addr+4)
-	8.times {
-		to = b.to_subfuncret || b.to_normal
-		if to.length > 1
-			cmp = b.list.find { |di| di.opcode.name == 'cmp' }
-			break
-		end
-		b = dasm.block_at(to[0])
-	}
+    b = dasm.block_including(addr+4)
+    8.times {
+        to = b.to_subfuncret || b.to_normal
+        if to.length > 1
+            cmp = b.list.find { |di| di.opcode.name == 'cmp' }
+            break
+        end
+        b = dasm.block_at(to[0])
+    }
 
-	next if not cmp
-	puts cmp if $VERBOSE
+    next if not cmp
+    puts cmp if $VERBOSE
 
-	# find which arg we can resolve
-	arg = cmp.instruction.args.find { |a|
-		val = dasm.backtrace(a.symbolic, cmp.address)
-		val != [] and val[0] != Metasm::Expression::Unknown
-	}.symbolic
+    # find which arg we can resolve
+    arg = cmp.instruction.args.find { |a|
+        val = dasm.backtrace(a.symbolic, cmp.address)
+        val != [] and val[0] != Metasm::Expression::Unknown
+    }.symbolic
 
-	# XXX windows does: cmp eax, [keydisplay-4], but on osx: cmp eax, keydisplay-4
-	arg = arg.pointer if arg.kind_of?(Metasm::Indirection)
-	keydisplay << dasm.normalize(dasm.backtrace(arg, cmp.address)) - 4
+    # XXX windows does: cmp eax, [keydisplay-4], but on osx: cmp eax, keydisplay-4
+    arg = arg.pointer if arg.kind_of?(Metasm::Indirection)
+    keydisplay << dasm.normalize(dasm.backtrace(arg, cmp.address)) - 4
 }
 
 if keydisplay.length != 1
-	puts "<!-- keydisplay #{keydisplay.map { |i| i.to_s(16) }.join(',')} -->"
+    puts "<!-- keydisplay #{keydisplay.map { |i| i.to_s(16) }.join(',')} -->"
 else
-	puts "<global-address name='keydisplay' value='0x#{'%08x' % keydisplay[0]}'/>"
+    puts "<global-address name='keydisplay' value='0x#{'%08x' % keydisplay[0]}'/>"
 end

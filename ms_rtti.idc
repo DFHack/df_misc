@@ -145,8 +145,8 @@ static matchBytes(addr,match)
 {
   auto i,len,s;
   len = strlen(match);
-  if (len%2) 
-  { 
+  if (len%2)
+  {
     Warning("Bad match string in matchBytes: %s",match);
     return 0;
   }
@@ -194,7 +194,7 @@ static CommentStack(start, offset, name, struc_id)
   l = l+offset;
   //Message("%a: ebp offset = %02Xh\n",start,l);
   if (l<0)
-  {    
+  {
     //Message("growing the frame to locals=%d, regs=4, args=%d.\n",-offset, GetFrameArgsSize(start));
     //we need to grow the locals
     MakeFrame(start, -offset, GetFrameRegsSize(start), GetFrameArgsSize(start));
@@ -260,7 +260,7 @@ static MangleNumber(x)
   {
     sign = 1;
     x = -x;
-  }  
+  }
   if (x==0)
     return "A@";
   else if (x<=10)
@@ -593,7 +593,7 @@ typedef const struct _s__CatchableTypeArray {
   int nCatchableTypes;
   _CatchableType *arrayOfCatchableTypes[];
 } _CatchableTypeArray;
-*/  
+*/
 
   auto indent_str,i,a,n,p,s;
   if (x==BADADDR || x==0)
@@ -725,7 +725,7 @@ typedef const struct _s_HandlerType {
   int dispCatchObj;                 //08
   void * addressOfHandler;          //0C
 }
-*/  
+*/
   auto indent_str,i,a,n,p,s;
   if (x==BADADDR || x==0)
     return;
@@ -798,7 +798,7 @@ typedef const struct _s_HandlerType {
         else
           s = form("; e = [epb+%Xh]",p);
         ExtLinA(Dword(a+12),2,s);
-      }      
+      }
     }
     i=i+1;
     a=a+16;
@@ -825,7 +825,7 @@ typedef const struct _s_UnwindMapEntry {
   int toState;          //0
   function  * action;   //4
 } UnwindMapEntry;
-*/  
+*/
   auto indent_str,i,a,s,n;
   if (x==BADADDR || x==0)
     return;
@@ -964,7 +964,7 @@ static Parse_Vtable(a)
       MakeName(Dword(a-4),"??_R4"+s+"6B@");
     }
     else// if ((i&3)==1)
-    { 
+    {
       //Message("Multiple inheritance\n");
       s2 = GetVtableClass(Dword(a-4));
       s2 = substr(s2,4,-1);
