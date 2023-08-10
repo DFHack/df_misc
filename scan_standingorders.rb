@@ -71,7 +71,7 @@ list = {
         ': Auto Smelter' => 'auto_smelter',
         ': Auto Other' => 'auto_other',
     },
-   
+
     'Current Zone Orders' => {
         ': Zone-Only Drinking' => 'zoneonly_drink',
         ': Zone-Only Fishing' => 'zoneonly_fish',

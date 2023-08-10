@@ -492,7 +492,7 @@ sub render_item_compound {
     } elsif ($subtype eq 'enum') {
         if (!$item->getAttribute('type-name')) {
             # inline enum
-            render_global_enum($sname, $item); 
+            render_global_enum($sname, $item);
             render_item_number($item, $name, $sname);
         } else {
             render_item_number($item, $name);
@@ -818,4 +818,3 @@ close FH;
 for (@lines_full) {
     print "$_\n" if $_ =~ /TODO/;
 }
-

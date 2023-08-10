@@ -20,53 +20,53 @@ dfbase = df.chomp('.exe') if df
 abort 'usage: prepare.rb df/libs/Dwarf_Fortress dfhack/' if not df or not dfhack
 
 if df =~ /\.exe$/i and df !~ /dwarfort\.exe$/ # filter OSX
-	windows = true
-	globals = dfhack + '/library/xml/windows/globals.csv'
+    windows = true
+    globals = dfhack + '/library/xml/windows/globals.csv'
 else
-	linux = true
-	globals = dfhack + '/library/xml/linux/globals.csv'
+    linux = true
+    globals = dfhack + '/library/xml/linux/globals.csv'
 end
 
 
 def redirect_stdout(filename, mode='w')
-	old = $stdout.dup
-	$stdout.reopen(filename, mode)
-	yield
+    old = $stdout.dup
+    $stdout.reopen(filename, mode)
+    yield
 ensure
-	$stdout.reopen(old)
+    $stdout.reopen(old)
 end
 
 
 def dump_vfuncs(dasm, addr, cls, vt, soff=0)
-	vt.members.each { |m|
-		off = vt.offsetof(dasm.c_parser, m)
-		if not m.type.pointer?
-			dump_vfuncs(dasm, addr, cls, m.type, soff+off)
-		else
-			faddr = dasm.decode_dword(addr+soff+off)
-			# TODO full prototype, including return type
-			mangled = "_ZN#{cls.length}#{cls}#{m.name.length}#{m.name}E"
-			puts '%08x d %s' % [faddr, mangled]
-		end
-	}
+    vt.members.each { |m|
+        off = vt.offsetof(dasm.c_parser, m)
+        if not m.type.pointer?
+            dump_vfuncs(dasm, addr, cls, m.type, soff+off)
+        else
+            faddr = dasm.decode_dword(addr+soff+off)
+            # TODO full prototype, including return type
+            mangled = "_ZN#{cls.length}#{cls}#{m.name.length}#{m.name}E"
+            puts '%08x d %s' % [faddr, mangled]
+        end
+    }
 end
 
 def vtable_funcs_map(df, map, hdr)
-	vtables = File.readlines(map).map { |l| w = l.split; [w[0].to_i(16), w[2]] }
+    vtables = File.readlines(map).map { |l| w = l.split; [w[0].to_i(16), w[2]] }
 
-	require 'metasm'
-	ENV['METASM_NODECODE_RELOCS'] = '1'
-	dasm = Metasm::AutoExe.decode_file(df).disassembler
-	dasm.parse_c_file(hdr)
+    require 'metasm'
+    ENV['METASM_NODECODE_RELOCS'] = '1'
+    dasm = Metasm::AutoExe.decode_file(df).disassembler
+    dasm.parse_c_file(hdr)
 
-	vtables.each { |addr, name|
-		cls = name[/vtable_(.*)/, 1]
-		next if not struct = dasm.c_parser.toplevel.struct[cls]
-		vt = struct.members.first.type
-		vt = vt.members.first.type until vt.pointer?
-		vt = vt.type
-		dump_vfuncs(dasm, addr, cls, vt)
-	}
+    vtables.each { |addr, name|
+        cls = name[/vtable_(.*)/, 1]
+        next if not struct = dasm.c_parser.toplevel.struct[cls]
+        vt = struct.members.first.type
+        vt = vt.members.first.type until vt.pointer?
+        vt = vt.type
+        dump_vfuncs(dasm, addr, cls, vt)
+    }
 end
 
 

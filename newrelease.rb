@@ -24,29 +24,29 @@ version = win_binary_url[/df_(.*)_win\.zip/, 1]
 
 puts "latest version: #{version}"
 else
-	version = ARGV.shift
-	lin_binary_url = "df_#{version}_linux.zip"
-	win_binary_url = "df_#{version}_win.zip"
-	osx_binary_url = "df_#{version}_osx.zip"
+    version = ARGV.shift
+    lin_binary_url = "df_#{version}_linux.zip"
+    win_binary_url = "df_#{version}_win.zip"
+    osx_binary_url = "df_#{version}_osx.zip"
 end
 
 [64, 32].each { |bits|
-	if bits == 32
-		version += '_32bits'
-		lin_binary_url.sub!(/.tar.bz2$/, '32.tar.bz2') rescue nil
-		win_binary_url.sub!(/.zip$/, '32.zip')
-		osx_binary_url.sub!(/.tar.bz2$/, '32.tar.bz2')
-	end
+    if bits == 32
+        version += '_32bits'
+        lin_binary_url.sub!(/.tar.bz2$/, '32.tar.bz2') rescue nil
+        win_binary_url.sub!(/.zip$/, '32.zip')
+        osx_binary_url.sub!(/.tar.bz2$/, '32.tar.bz2')
+    end
 
 lin_tmp = File.join(tmp_path, "df_lin_#{version}")
 if lin_binary_url and not File.directory?(lin_tmp)
-	puts "dl linux #{lin_binary_url}"
-	Dir.mkdir(lin_tmp)
-	File.open(lin_tmp + '/' + lin_binary_url, 'w') { |fd| fd.write open(base_url + lin_binary_url).read } rescue nil
-	puts "extracting"
-	Dir.chdir(lin_tmp) { system 'tar', 'xf', lin_binary_url }
-	Dir.entries(File.join(lin_tmp, 'df_linux')).each { |e| next if e == '.' or e == '..' ; File.rename(File.join(lin_tmp, 'df_linux', e), File.join(lin_tmp, e)) }
-	Dir.rmdir(lin_tmp+'/df_linux')
+    puts "dl linux #{lin_binary_url}"
+    Dir.mkdir(lin_tmp)
+    File.open(lin_tmp + '/' + lin_binary_url, 'w') { |fd| fd.write open(base_url + lin_binary_url).read } rescue nil
+    puts "extracting"
+    Dir.chdir(lin_tmp) { system 'tar', 'xf', lin_binary_url }
+    Dir.entries(File.join(lin_tmp, 'df_linux')).each { |e| next if e == '.' or e == '..' ; File.rename(File.join(lin_tmp, 'df_linux', e), File.join(lin_tmp, e)) }
+    Dir.rmdir(lin_tmp+'/df_linux')
 end
 lin_bin = File.join(lin_tmp, 'libs', 'Dwarf_Fortress')
 lin_bin = nil if not File.file?(lin_bin)
@@ -55,24 +55,24 @@ lin_lib = nil if not File.file?(lin_lib)
 
 win_tmp = File.join(tmp_path, "df_win_#{version}")
 if win_binary_url and not File.directory?(win_tmp)
-	puts "dl windows #{win_binary_url}"
-	Dir.mkdir(win_tmp)
-	File.open(win_tmp + '/' + win_binary_url, 'w') { |fd| fd.write open(base_url + win_binary_url).read } rescue nil
-	puts "extracting"
-	Dir.chdir(win_tmp) { system 'unzip', '-q', win_binary_url }
+    puts "dl windows #{win_binary_url}"
+    Dir.mkdir(win_tmp)
+    File.open(win_tmp + '/' + win_binary_url, 'w') { |fd| fd.write open(base_url + win_binary_url).read } rescue nil
+    puts "extracting"
+    Dir.chdir(win_tmp) { system 'unzip', '-q', win_binary_url }
 end
 win_bin = File.join(win_tmp, 'Dwarf Fortress.exe')
 win_bin = nil if not File.file?(win_bin)
 
 osx_tmp = File.join(tmp_path, "df_osx_#{version}")
 if osx_binary_url and not File.directory?(osx_tmp)
-	puts "dl osx #{osx_binary_url}"
-	Dir.mkdir(osx_tmp)
-	File.open(osx_tmp + '/' + osx_binary_url, 'w') { |fd| fd.write open(base_url + osx_binary_url).read } rescue nil
-	puts "extracting"
-	Dir.chdir(osx_tmp) { system 'tar', 'xf', osx_binary_url }
-	Dir.entries(osx_tmp+'/df_osx').each { |e| next if e == '.' or e == '..' ; File.rename osx_tmp+'/df_osx/'+e, osx_tmp+'/'+e }
-	Dir.rmdir(osx_tmp+'/df_osx')
+    puts "dl osx #{osx_binary_url}"
+    Dir.mkdir(osx_tmp)
+    File.open(osx_tmp + '/' + osx_binary_url, 'w') { |fd| fd.write open(base_url + osx_binary_url).read } rescue nil
+    puts "extracting"
+    Dir.chdir(osx_tmp) { system 'tar', 'xf', osx_binary_url }
+    Dir.entries(osx_tmp+'/df_osx').each { |e| next if e == '.' or e == '..' ; File.rename osx_tmp+'/df_osx/'+e, osx_tmp+'/'+e }
+    Dir.rmdir(osx_tmp+'/df_osx')
 end
 osx_bin = File.join(osx_tmp, 'dwarfort.exe')
 osx_bin = nil if not File.file?(osx_bin)

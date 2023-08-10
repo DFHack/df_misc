@@ -35,7 +35,7 @@ static getEHRecCatch()
 }
 
 static CommentStackEH(start, hasESP, EHCookie, GSCookie)
-{  
+{
   if (hasESP)
     CommentStack(start,-16, "__$EHRec$", getEHRecCatch());
   else
@@ -141,7 +141,7 @@ static ParseCxxHandler(func, handler, fixFunc)
   }
   Message(form("Detected function start at %08X\n",start));
   u = x; //FuncInfo;
-  
+
   //parse unwind handlers
   count = Dword(u+4); //maxState
   i=0;
@@ -175,8 +175,8 @@ static ParseCxxHandler(func, handler, fixFunc)
   Message(form("Handlers block: %08X-%08X\n", z, y));
   if (GetFunctionFlags(start) == -1)
   {
-    if (fixFunc) 
-    { 
+    if (fixFunc)
+    {
       MakeUnkn(start, 1);
       MakeCode(start);
       MakeFunction(start, BADADDR);
@@ -229,7 +229,7 @@ typedef const struct _s_HandlerType {
   int dispCatchObj;                 //08
   void * addressOfHandler;          //0C
 }
-*/  
+*/
 
   //parse catch blocks
   y = 0;
@@ -238,7 +238,7 @@ typedef const struct _s_HandlerType {
   count = Dword(u+12); //nTryBlocks
   x = Dword(u+16);     //pTryBlocksMap
   Message("%d try blocks\n",count);
-  while (i<count) {    
+  while (i<count) {
     cnt2 = Dword(x+12);        //nCatches
     a = Dword(x+16);           //pHandlerArray
     i2 = 0;
@@ -264,8 +264,8 @@ typedef const struct _s_HandlerType {
     //Message("y=0x%08.8X, z=0x%08.8X\n",y,z);
     end = FindFuncEnd(y);
     if (end==BADADDR) {
-      if (fixFunc) 
-      { 
+      if (fixFunc)
+      {
         MakeUnkn(y, 1);
         MakeCode(y);
       }
@@ -394,7 +394,7 @@ static doEHProlog(name,fixFunc)
   a=LocByName(name);
   if (a==BADADDR)
     return;
-  Message("%s = %08X\n",name,a);  
+  Message("%s = %08X\n",name,a);
   i=RfirstB(a);
   while(i!=BADADDR)
   {
@@ -508,12 +508,12 @@ static checkScopeTable(a, ver)
 
 /*
 struct _EH4_EXCEPTION_REGISTRATION_RECORD {
-	void* SavedESP;
-	_EXCEPTION_POINTERS* ExceptionPointers;
-	_EXCEPTION_REGISTRATION_RECORD* Next;
-	enum _EXCEPTION_DISPOSITION (*Handler)(_EXCEPTION_RECORD*, void*, _CONTEXT*, void*);
-	DWORD EncodedScopeTable;
-	unsigned long TryLevel;
+    void* SavedESP;
+    _EXCEPTION_POINTERS* ExceptionPointers;
+    _EXCEPTION_REGISTRATION_RECORD* Next;
+    enum _EXCEPTION_DISPOSITION (*Handler)(_EXCEPTION_RECORD*, void*, _CONTEXT*, void*);
+    DWORD EncodedScopeTable;
+    unsigned long TryLevel;
 };
 */
 
@@ -566,7 +566,7 @@ static fixSEHFunc(func, scopetable, ver, fixFunc)
   z = 0x7FFFFFFF;
   i = 0;
   hasESP = 0;
-  while (i<k) {       
+  while (i<k) {
     t = Dword(x+4);
     if (t) {
       hasESP=1;
@@ -597,7 +597,7 @@ static fixSEHFunc(func, scopetable, ver, fixFunc)
     x = x+12;
     i = i+1;
   }
-  
+
 
   //Message("y=0x%08.8X, z=0x%08.8X\n",y,z);
   if (1)
@@ -637,10 +637,10 @@ static fixSEHFunc(func, scopetable, ver, fixFunc)
       //the last handler is a finally handler
       //check that it ends with a ret, call or jmp
       z = FindFuncEnd(y);
-      if (z!=BADADDR && 
-          !(Byte(z-1)==0xC3 || Byte(z-5)==0xE9 || Byte(z-5)==0xE8 || 
+      if (z!=BADADDR &&
+          !(Byte(z-1)==0xC3 || Byte(z-5)==0xE9 || Byte(z-5)==0xE8 ||
             Byte(z-2)==0xEB || Byte(z-1)==0xCC || Word(z-6)==0x15FF) )
-      {        
+      {
         //we need to add the following funclet to our function
         end = FindFuncEnd(z);
         if (end!=BADADDR)
@@ -658,7 +658,7 @@ static fixSEHFunc(func, scopetable, ver, fixFunc)
   //comment the table and handlers
   x = scopetable;
   ExtLinA(x,0,form("; SEH scopetable for %08X",func));
-  if (ver==4) 
+  if (ver==4)
   {
     OffCmt(x,"GSCookieOffset");
     OffCmt(x+4,"GSCookieXOROffset");
@@ -694,7 +694,7 @@ static doSEHProlog(name, ver, fixFunc)
   a=LocByName(name);
   if (a==BADADDR)
     return;
-  Message("%s = %08X\n",name,a);  
+  Message("%s = %08X\n",name,a);
   i=RfirstB(a);
   while(i!=BADADDR)
   {
@@ -705,11 +705,11 @@ static doSEHProlog(name, ver, fixFunc)
     // -7  6A xx            push    xx
     // -5  68 xx xx xx xx   push    OFFSET __sehtable$_func
     // 0   e8 00 00 00 00   call    __SEH_prolog
-    //   
+    //
     //
     locals = -1; scopetable=0;
-    if (Byte(i-5)==0x68) 
-    {      
+    if (Byte(i-5)==0x68)
+    {
       scopetable = Dword(i-4);
       if (Byte(i-7)==0x6A)
       {
@@ -735,7 +735,7 @@ static doSEHProlog(name, ver, fixFunc)
       }
       else
         Message("Error\n");
-    }  
+    }
     i=RnextB(a,i);
   }
 }
@@ -754,14 +754,14 @@ static fixSEHPrologs(fixFunc)
   doSEHPrologs("__SEH_prolog",3, fixFunc);
   doSEHPrologs("_SEH_prolog4",4, fixFunc);
   doSEHPrologs("__SEH_prolog4",4, fixFunc);
-  doSEHPrologs("_SEH_prolog4_GS",4, fixFunc); 
-  doSEHPrologs("__SEH_prolog4_GS",4, fixFunc); 
+  doSEHPrologs("_SEH_prolog4_GS",4, fixFunc);
+  doSEHPrologs("__SEH_prolog4_GS",4, fixFunc);
 }
 
 static findFunc(name)
 {
   auto a;
-  a = LocByName("j_"+name); 
+  a = LocByName("j_"+name);
   if (a==BADADDR)
     a = LocByName(name);
   return a;
