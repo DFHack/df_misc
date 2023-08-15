@@ -1064,7 +1064,8 @@ public class import_df_structures extends GhidraScript {
 							// ignore
 							break;
 						case "original-name":
-							((IOwnsType) stack.peek()).getOwnedType().originalName = reader.getAttributeValue(i);
+							if (stack.peek() instanceof TypeDef)
+								((IOwnsType) stack.peek()).getOwnedType().originalName = reader.getAttributeValue(i);
 							break;
 						case "is-union":
 							((IOwnsType) stack.peek()).getOwnedType().isUnion = Boolean
