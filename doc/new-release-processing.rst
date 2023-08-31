@@ -36,4 +36,4 @@ downloading depots directly from steam:
 * `steam://open/console`
 * in steam, use console command, where `xxxxx`` is the manifest ID for the release of interest (use SteamDB)
   * `download_depot 975370 975372 xxxxx` for windows
-  * `download_depot 975370 975372 xxxxx` for linux
+  * `download_depot 975370 975373 xxxxx` for linux
