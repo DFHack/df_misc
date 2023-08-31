@@ -30,6 +30,7 @@ import ghidra.program.model.mem.MemoryBufferImpl;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
+import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.SystemUtilities;
 import ghidra.util.task.TaskMonitor;
 import ghidra.util.Swing;
@@ -1904,7 +1905,11 @@ public class import_df_structures extends GhidraScript {
 			}
 			if (func != null) {
 				func.setName(field.getFieldName(), SourceType.IMPORTED);
-				func.setParentNamespace(cls);
+				try {
+					func.setParentNamespace(cls);
+				} catch (DuplicateNameException e) {
+					printerr("duplicate name exception while setting parent namespace for " + cls.getName() + "::" + field.getFieldName());
+				}
 				var ret = new ReturnParameterImpl(funcType.getReturnType(), currentProgram);
 				var params = new ArrayList<Variable>();
 				boolean first = true;
@@ -1932,7 +1937,10 @@ public class import_df_structures extends GhidraScript {
 				null, -1);
 
 		Data ti;
-		if (tiVTAddr.getOffset() == this.classVTable.getOffset()) {
+		if (tiVTAddr == null) {
+			printerr("unable to label type info pointer " + name + "@" + addr);
+			return;
+		} else if (tiVTAddr.getOffset() == this.classVTable.getOffset()) {
 			ti = labelData(tiAddr, this.classTypeInfo, "type_info_" + name, -1);
 		} else if (tiVTAddr.getOffset() == this.subClassVTable.getOffset()) {
 			ti = labelData(tiAddr, this.subClassTypeInfo, "type_info_" + name, -1);
@@ -2202,10 +2210,14 @@ public class import_df_structures extends GhidraScript {
 				println(ns.getName());
 			}
 			sym.setNamespace(ns);
-			if (sym.getName().equals("basic_string")) {
-				sym.setName("string", SourceType.IMPORTED);
-			} else if (sym.getName().equals("~basic_string")) {
-				sym.setName("~string", SourceType.IMPORTED);
+			try {
+				if (sym.getName().equals("basic_string")) {
+					sym.setName("string", SourceType.IMPORTED);
+				} else if (sym.getName().equals("~basic_string")) {
+					sym.setName("~string", SourceType.IMPORTED);
+				}
+			} catch (DuplicateNameException e) {
+				printerr("duplicate name exception while attempting to rename " + sym.getName());
 			}
 			if (sym.getName(true).equals("std::_string_rep::_S_empty_rep_storage")) {
 				clearListing(addr);
@@ -2257,7 +2269,10 @@ public class import_df_structures extends GhidraScript {
 		if (name.equals("std") || name.startsWith("__cxx")) {
 			var ns = symtab.getNamespace(namespace.getName(), global);
 			if (ns == null) {
-				ns = symtab.createNameSpace(parent, namespace.getName(), SourceType.IMPORTED);
+				ns = symtab.getNamespace(namespace.getName(), parent);
+				if (ns == null) {
+					ns = symtab.createNameSpace(parent, namespace.getName(), SourceType.IMPORTED);
+				}
 			}
 			return ns;
 		}
