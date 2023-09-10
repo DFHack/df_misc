@@ -1823,39 +1823,16 @@ public class import_df_structures extends GhidraScript {
 			return;
 		}
 
-		// Need to check if the area of data we want to label is already defined within the listing database
-		// First, we check for overlapping data that starts before our data's first address
-		// Like so:
-		//       | New Data |
-		// | Old Data |
-		// TODO: Check if existing data is the same as the data we are setting. If not, prompt user for which one to keep
-		DataIterator backwardsDataIt = listing.getData(addr, false);
-		while (backwardsDataIt.hasNext()) {
-			Data prev = backwardsDataIt.next();
-			// Check if the start of our data (addr) is before prev's maxAddress
-			if (addr.compareTo(prev.getMaxAddress()) <= 0) {
-				cleanOverlappingData(prev);
-			}
-			else {
-				break;
-			}
-		}
+		Address start = addr;
+		Address end = addr.add(dt.getLength());
 
-		// Secondly, we check for overlapping data that begins within our data's range
-		// Like so:
-		// | New Data |
-		//       | Old Data |
-		DataIterator forwardsDataIt = listing.getData(addr, true);
-		Address maxAddr = addr.add(dt.getLength());
-		while (forwardsDataIt.hasNext()) {
-			Data next = forwardsDataIt.next();
-			// Check if the end of our data (maxAddr) is before next's minAddress
-			if (maxAddr.compareTo(next.getMinAddress()) >= 0) {
-				cleanOverlappingData(next);
+		while (start.compareTo(end) < 0) {
+			Data overlapping = listing.getDataContaining(start);
+			if (overlapping != null) {
+				start = overlapping.getMaxAddress();
+				cleanOverlappingData(overlapping);
 			}
-			else {
-				break;
-			}
+			start = start.next();
 		}
 	}
 
