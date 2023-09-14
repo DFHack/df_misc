@@ -123,21 +123,6 @@ public class import_df_structures extends GhidraScript {
 
 		var ptr = dtm.getPointer(target);
 
-		// this code was a workaround for a defect in ghidra 9 which has been fixed in ghidra 10
-
-		/*
-		if (target instanceof Pointer) {
-			var base = ((Pointer) target).getDataType();
-			Structure ptr_wrapper = new StructureDataType("ptr_to_" + base.getName(), 0);
-			ptr_wrapper = (Structure) dtm.getCategory(base.getCategoryPath()).addDataType(ptr_wrapper,
-					DataTypeConflictHandler.REPLACE_HANDLER);
-			ptr_wrapper.setToDefaultAligned();
-			ptr_wrapper.setPackingEnabled(true);
-			ptr_wrapper.add(target, "ptr", null);
-			ptr = dtm.getPointer(ptr_wrapper);
-		}
-		 */
-
 		var vec = new StructureDataType(name, 0);
 		vec.setToDefaultAligned();
 		vec.setPackingEnabled(true);
@@ -147,6 +132,81 @@ public class import_df_structures extends GhidraScript {
 		vec.add(ptr, "_M_end_of_storage", null);
 
 		return createDataType(dtcStd, vec);
+	}
+
+	private DataType createOptionalType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+		if (BooleanDataType.dataType.isEquivalent(target))
+			target = dtInt8;
+		var name = "optional<" + target.getName() + ">";
+
+		var existing = dtcStd.getDataType(name);
+		if (existing != null)
+			return existing;
+
+		var opt = new StructureDataType(name, 0);
+		opt.setToDefaultAligned();
+		opt.setPackingEnabled(true);
+
+		opt.add(target, "_Value", null);
+		opt.add(BooleanDataType.dataType, "_HasValue", null);
+
+		return createDataType(dtcStd, opt);
+	}
+
+	private DataType createSharedPtrType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+		if (BooleanDataType.dataType.isEquivalent(target))
+			target = dtInt8;
+		var name = "shared_ptr<" + target.getName() + ">";
+
+		var existing = dtcStd.getDataType(name);
+		if (existing != null)
+			return existing;
+
+		var ptr = dtm.getPointer(target);
+		var refptr = dtm.getPointer(null);
+
+		var shptr = new StructureDataType(name, 0);
+		shptr.setToDefaultAligned();
+		shptr.setPackingEnabled(true);
+
+		shptr.add(ptr, "_Px", null);
+		shptr.add(refptr, "_Rx", null);
+
+		return createDataType(dtcStd, shptr);
+	}
+
+	private DataType createFunctionType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+		if (BooleanDataType.dataType.isEquivalent(target))
+			target = dtInt8;
+		var name = "function<" + target.getName() + "()>";
+
+		var existing = dtcStd.getDataType(name);
+		if (existing != null)
+			return existing;
+
+		var ptr = dtm.getPointer(null);
+		var fillptr = dtm.getPointer(null);
+
+		var func = new StructureDataType(name, 0);
+		func.setToDefaultAligned();
+		func.setPackingEnabled(true);
+
+		func.add(fillptr,"_vtable",null);
+		func.add(fillptr,"",null);
+		func.add(fillptr,"",null);
+		func.add(fillptr,"",null);
+		func.add(fillptr,"",null);
+		func.add(fillptr,"",null);
+		func.add(fillptr,"",null);
+		func.add(ptr, "_Callable", null);
+
+		return createDataType(dtcStd, func);
 	}
 
 	private DataType createSetType(DataType target) throws Exception {
@@ -251,6 +311,33 @@ public class import_df_structures extends GhidraScript {
 		node.add(target, "_M_value_field", null);
 
 		set.add(dtSizeT, "_M_node_count", null);
+
+		return createDataType(dtcStd, set);
+	}
+
+	private DataType createUnorderedMapType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+
+		var name = "unordered_map<" + target.getName() + ">";
+		var existing = dtcStd.getDataType(name);
+		if (existing != null && !existing.isNotYetDefined())
+			return existing;
+
+		var set = new StructureDataType(name, 0);
+		set.setToDefaultAligned();
+		set.setPackingEnabled(true);
+
+		var fillptr = dtm.getPointer(null);
+
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
 
 		return createDataType(dtcStd, set);
 	}
@@ -1368,10 +1455,18 @@ public class import_df_structures extends GhidraScript {
 				return createVectorType(f.item == null ? null : getDataType(f.item));
 			case "stl-bit-vector":
 				return dtVectorBool;
+			case "stl-optional":
+				return createOptionalType(f.item == null ? null : getDataType(f.item));
+			case "stl-shared-ptr":
+				return createSharedPtrType(f.item == null ? null : getDataType(f.item));
+			case "stl-function":
+				return createFunctionType(f.item == null ? null : getDataType(f.item));
 			case "stl-set":
 				return createSetType(f.item == null ? null : getDataType(f.item));
 			case "stl-map":
 				return createMapType(f.item == null ? null : getDataType(f.item));
+			case "stl-unordered-map":
+				return createUnorderedMapType(f.item == null ? null : getDataType(f.item));
 			case "stl-deque":
 				return dtcStd.addDataType(new TypedefDataType(
 						"deque<" + (f.item == null ? DataType.DEFAULT : getDataType(f.item)).getName() + ">", dtDeque),
@@ -1936,7 +2031,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private void labelVTable(Namespace ns, Address addr, GhidraClass cls, DataType dt) throws Exception {
-		labelData(addr, dt, dt.getName(), 0);
+//		labelData(addr, dt, dt.getName(), 0);
 		labelVMethods(addr, cls, (Structure) dt);
 		if (this.classTypeInfo != null) {
 			labelTypeInfoPointer(addr.subtract(currentProgram.getDefaultPointerSize()), cls.getName());
