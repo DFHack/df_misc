@@ -26,14 +26,33 @@ for windows:
 
 for linux:
 
-* add a symbol-table with the correct md5-hash
-* install DFHack
-* run devel/dump-offsets, paste into the symbol table and add a newline
-* run devel/scan-vtables, paste into the symbol table
-  * `./dfhack-run devel/scan-vtables | ansifilter  | LANG=C sort`
+* run ``md5sum dwarfort`` to get the hash of the main DF executable
+* add a fragment like this to the Linux section of the ``symbols.xml`` file
+  (use ``ITCH`` or ``CLASSIC`` instead of ``STEAM`` as appropriate)::
+
+    <symbol-table name='v0.50.12 linux64 STEAM' os-type='linux'>
+        <md5-hash value='c7dcc28bc714daff32f6f53c95542faf'/>
+    </symbol-table>
+
+* install DFHack to the DF directory
+* run ``./dfhack`` from a terminal
+* run ``devel/dump-offsets`` at the ``[DFHack]#`` prompt, copy the output into
+  the ``symbol-table`` element in ``symbols.xml`` and add a newline
+* from a different terminal in the DF directory, run::
+
+    ./dfhack-run devel/scan-vtables | ansifilter | LANG=C sort
+
+* copy the output into the ``symbol-table`` element in ``symbols.xml``
+* close DF
+* reinstall DFHack so the updated ``hack/symbols.xml`` file is in place
+* relaunch DF and verify that DFHack functionality works as expected
+* remove ``symbol-table`` elements that are no longer relevant for this DF
+  version
 
 downloading depots directly from steam:
+
 * `steam://open/console`
-* in steam, use console command, where `xxxxx`` is the manifest ID for the release of interest (use SteamDB)
+* in steam, use console command, where `xxxxx` is the manifest ID for the release
+  of interest (use `SteamDB <https://steamdb.info/app/975370/depots/>`__)
   * `download_depot 975370 975372 xxxxx` for windows
   * `download_depot 975370 975373 xxxxx` for linux
