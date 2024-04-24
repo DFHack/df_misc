@@ -11,7 +11,7 @@ for windows:
 * for each release edition, construct symbols stanza and add to `symbols.xml`
 
   * extract timestamp using ghidra
-  * run scan_vtable.rb and dumpdf_globals.rb
+  * run scan_vtable.rb and dump_df_globals.rb
   * write initial `symbols.xml` to local temporary
   * do initial ghidra analysis, skipping switch and parameter propagation
 
