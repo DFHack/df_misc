@@ -155,12 +155,56 @@ public class import_df_structures extends GhidraScript {
 		return createDataType(dtcStd, opt);
 	}
 
+	private DataType createVariantType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+		if (BooleanDataType.dataType.isEquivalent(target))
+			target = dtInt8;
+		var name = "variant<" + target.getName() + ">";
+
+		var existing = dtcStd.getDataType(name);
+		if (existing != null)
+			return existing;
+
+		var opt = new StructureDataType(name, 0);
+		opt.setToDefaultAligned();
+		opt.setPackingEnabled(true);
+
+		opt.add(BooleanDataType.dataType, "_tag", null);
+
+		return createDataType(dtcStd, opt);
+	}
+
 	private DataType createSharedPtrType(DataType target) throws Exception {
 		if (target == null)
 			target = DataType.DEFAULT;
 		if (BooleanDataType.dataType.isEquivalent(target))
 			target = dtInt8;
 		var name = "shared_ptr<" + target.getName() + ">";
+
+		var existing = dtcStd.getDataType(name);
+		if (existing != null)
+			return existing;
+
+		var ptr = dtm.getPointer(target);
+		var refptr = dtm.getPointer(null);
+
+		var shptr = new StructureDataType(name, 0);
+		shptr.setToDefaultAligned();
+		shptr.setPackingEnabled(true);
+
+		shptr.add(ptr, "_Px", null);
+		shptr.add(refptr, "_Rx", null);
+
+		return createDataType(dtcStd, shptr);
+	}
+
+	private DataType createWeakPtrType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+		if (BooleanDataType.dataType.isEquivalent(target))
+			target = dtInt8;
+		var name = "weak_ptr<" + target.getName() + ">";
 
 		var existing = dtcStd.getDataType(name);
 		if (existing != null)
@@ -1457,7 +1501,11 @@ public class import_df_structures extends GhidraScript {
 				return dtVectorBool;
 			case "stl-optional":
 				return createOptionalType(f.item == null ? null : getDataType(f.item));
+			case "stl-variant":
+				return createVariantType(f.item == null ? null : getDataType(f.item));
 			case "stl-shared-ptr":
+				return createSharedPtrType(f.item == null ? null : getDataType(f.item));
+			case "stl-weak-ptr":
 				return createSharedPtrType(f.item == null ? null : getDataType(f.item));
 			case "stl-function":
 				return createFunctionType(f.item == null ? null : getDataType(f.item));
