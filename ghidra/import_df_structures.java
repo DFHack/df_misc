@@ -1506,7 +1506,7 @@ public class import_df_structures extends GhidraScript {
 			case "stl-shared-ptr":
 				return createSharedPtrType(f.item == null ? null : getDataType(f.item));
 			case "stl-weak-ptr":
-				return createSharedPtrType(f.item == null ? null : getDataType(f.item));
+				return createWeakPtrType(f.item == null ? null : getDataType(f.item));
 			case "stl-function":
 				return createFunctionType(f.item == null ? null : getDataType(f.item));
 			case "stl-set":
