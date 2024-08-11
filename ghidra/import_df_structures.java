@@ -2477,6 +2477,15 @@ public class import_df_structures extends GhidraScript {
 
 	private void findLibrary(List<String> locations, String name, DomainFolder folder) {
 		var file = folder.getFile(name);
+		if (file == null) {
+			var files = folder.getFiles();
+			for (var f : files) {
+				if (f.getName().equalsIgnoreCase(name)) {
+					file = f;
+					break;
+				}
+			}
+		}
 		if (file != null) {
 			var md = file.getMetadata();
 			if (md.get("Executable Format").equals(currentProgram.getExecutableFormat())
