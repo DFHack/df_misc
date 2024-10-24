@@ -225,6 +225,9 @@ elems = extended ? 3 : 2
 off = table_start + elems*bits/8
 
 global = {}
+if extended
+    global_size = {}
+end
 global[off] = 'global_table'
 
 while true
@@ -239,6 +242,10 @@ while true
     break if ptr_str == 0
     name = dasm.decode_strz(ptr_str)
     global[ptr_var] = name
+    if extended
+        global_size[ptr_var] = size
+        $stderr.puts "#{name} #{size}\n"
+    end
 end
 
 ptr_prev = 0
@@ -253,10 +260,14 @@ global.sort.reverse.map do |ptr_var, name|
     case dump_fmt
     when 'xml'
         if not dump_size
-            out << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}'/>"
+            out << "<global-address name='#{name}' />"
         else
-            size = ptr_prev > 0 ? (ptr_prev-ptr_var) : 0
-            out << "<global-address name='#{name}' size='0x#{'%08x' % size}'/>"
+            if extended
+                size = global_size[ptr_var] || 0
+            else
+                size = ptr_prev > 0 ? (ptr_prev-ptr_var) : 0
+            end
+            out << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}' size='0x#{'%08x' % size}'/>"
             ptr_prev = ptr_var
         end
     when 'idc'
