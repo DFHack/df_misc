@@ -260,7 +260,7 @@ global.sort.reverse.map do |ptr_var, name|
     case dump_fmt
     when 'xml'
         if not dump_size
-            out << "<global-address name='#{name}' />"
+            out << "<global-address name='#{name}' value='0x#{'%08x' % ptr_var}'/>"
         else
             if extended
                 size = global_size[ptr_var] || 0
