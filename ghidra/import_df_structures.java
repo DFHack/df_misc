@@ -1617,6 +1617,7 @@ public class import_df_structures extends GhidraScript {
 			long prevValue = -1;
 			for (var ei : et.enumItems) {
 				long value = ei.hasValue ? ei.value : (prevValue + 1);
+				if (value < 0) continue;
 				var valueName = ei.hasName ? ei.name : ("_unk_" + value);
 				prevValue = value;
 				byteEnums[(int) (value / 8)].add(enumName + "_" + valueName, 1 << (value % 8));
