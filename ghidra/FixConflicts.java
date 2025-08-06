@@ -39,7 +39,7 @@ public class FixConflicts extends GhidraScript {
 			monitor.initialize(conflicts.size());
 			monitor.setMessage(message);
 			for (DataType dt : conflicts) {
-				monitor.checkCanceled();
+				// monitor.checkCanceled();
 				monitor.setMessage(dt.getName());
 				if (dt.isDeleted()) {
 					monitor.incrementProgress(1);
