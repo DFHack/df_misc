@@ -17,9 +17,7 @@ import javax.xml.stream.*;
 
 import ghidra.app.cmd.function.CreateFunctionCmd;
 import ghidra.app.cmd.label.DemanglerCmd;
-import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
 import ghidra.app.script.GhidraScript;
-import ghidra.app.services.AnalysisPriority;
 import ghidra.app.util.demangler.Demangled;
 import ghidra.framework.model.DomainFolder;
 import ghidra.program.database.data.DataTypeUtilities;
@@ -54,7 +52,7 @@ public class import_df_structures extends GhidraScript {
 	private DataType dtUint8, dtUint16, dtUint32, dtUint64;
 	private DataType dtInt8, dtInt16, dtInt32, dtInt64;
 	private DataType dtInt, dtLong, dtULong, dtSizeT;
-	private DataType dtString, dtFStream, dtMutex, dtConditionVariable, dtFuture, dtVectorBool, dtDeque;
+	private DataType dtString, dtFStream, dtMutex, dtConditionVariable, dtFuture, dtFsPath, dtVectorBool, dtDeque;
 	private Structure classTypeInfo, subClassTypeInfo, vmiClassTypeInfo;
 	private Address classVTable, subClassVTable, vmiClassVTable;
 	private int baseClassPadding;
@@ -430,6 +428,7 @@ public class import_df_structures extends GhidraScript {
 		var mutexDataType = new StructureDataType("mutex", 0);
 		var conditionVariableDataType = new StructureDataType("conditionVariable", 0);
 		var futureDataType = new StructureDataType("future", 0);
+		var fsPathDataType = new StructureDataType("fsPath", 0);
 		var dequeDataType = new StructureDataType("deque", 0);
 		stringDataType.setToDefaultAligned();
 		stringDataType.setPackingEnabled(true);
@@ -563,6 +562,10 @@ public class import_df_structures extends GhidraScript {
 			stringDataType.add(dtSizeT, "_Mysize", null);
 			stringDataType.add(dtSizeT, "_Myres", null);
 
+			fsPathDataType.add(createDataType(dtcStd, stringVal), "_Bx", null);
+			fsPathDataType.add(dtSizeT, "_Mysize", null);
+			fsPathDataType.add(dtSizeT, "_Myres", null);
+
 			bitVecDataType.setExplicitMinimumAlignment(currentProgram.getDefaultPointerSize());
 			bitVecDataType.add(Undefined.getUndefinedDataType(4 * currentProgram.getDefaultPointerSize()));
 
@@ -592,6 +595,7 @@ public class import_df_structures extends GhidraScript {
 		this.dtMutex = createDataType(dtcStd, mutexDataType);
 		this.dtConditionVariable = createDataType(dtcStd, conditionVariableDataType);
 		this.dtFuture = createDataType(dtcStd, futureDataType);
+		this.dtFsPath = createDataType(dtcStd, fsPathDataType);
 		this.dtString = createDataType(dtcStd, stringDataType);
 		this.dtVectorBool = createDataType(dtcStd, bitVecDataType);
 		this.dtDeque = createDataType(dtcStd, dequeDataType);
@@ -1491,6 +1495,8 @@ public class import_df_structures extends GhidraScript {
 				return dtConditionVariable;
 			case "stl-future":
 				return dtFuture;
+			case "stl-fs-path":
+				return dtFsPath;
 			}
 			break;
 		case "container":
