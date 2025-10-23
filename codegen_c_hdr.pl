@@ -27,7 +27,7 @@ my $stdc = grep { $_ eq '--stdc' } @ARGV;
 my $bin32 = grep { $_ eq '--32' } @ARGV;
    @ARGV  = grep { $_ ne '--32' } @ARGV if $bin32;
 
-my $input = $ARGV[0] || 'codegen/codegen.out.xml';
+my $input = $ARGV[0] || 'codegen.out.xml';
 my $output = $ARGV[1] || 'codegen.h';
 
 
@@ -648,7 +648,7 @@ sub render_item_staticarray {
 sub render_item_primitive {
     my ($item, $name) = @_;
 
-    my $subtype = $item->getAttribute('ld:subtype');
+    my $subtype = $item->getAttribute('ld:subtype') || '';
     if ($subtype eq 'stl-string') {
         push @lines, "struct stl_string";
         $lines[$#lines] .= " $name" if ($name);
@@ -658,15 +658,42 @@ sub render_item_primitive {
         } else {
             push @lines, "int64_t fstream[35]";     # (280 bytes, 8o align)
         }
+    } elsif ($subtype eq 'stl-mutex') {
+        if ($linux) {
+            # 40 bytes on glibc
+            push @lines, "int64_t mutex[5]";
+        } else {
+            # 80 bytes on msvc
+            push @lines, "int64_t mutex[10]";
+        }
+        $lines[$#lines] .= " $name" if ($name);
+    } elsif ($subtype eq 'stl-condition-variable') {
+        if ($linux) {
+            # 48 bytes on glibc
+            push @lines, "int64_t cv[6]";
+        } else {
+            # 8 bytes on msvc
+            push @lines, "int64_t cv[1]";
+        }
+        $lines[$#lines] .= " $name" if ($name);
+    } elsif ($subtype eq 'stl-fs-path') {
+        push @lines, "struct stl_string";
+        $lines[$#lines] .= " $name" if ($name);
+    } elsif ($subtype eq 'stl-future') {
+        # roughly a pointer
+        push @lines, "void *future";
+        $lines[$#lines] .= " $name" if ($name);
     } else {
         print "no render primitive $subtype\n";
+        push @lines, "/* UNKNOWN primitive: $subtype */";
+        $lines[$#lines] .= " $name" if ($name);
     }
 }
 
 sub render_item_bytes {
     my ($item, $name) = @_;
 
-    my $subtype = $item->getAttribute('ld:subtype');
+    my $subtype = $item->getAttribute('ld:subtype') || '';
     if ($subtype eq 'padding') {
         my $size = $item->getAttribute('size');
         push @lines, "char ${name}[$size]";
@@ -679,6 +706,8 @@ sub render_item_bytes {
         }
     } else {
         print "no render bytes $subtype\n";
+        my $size = $item->getAttribute('size') || 1;
+        push @lines, "char ${name}[$size]";
     }
 }
 
