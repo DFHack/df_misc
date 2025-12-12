@@ -304,16 +304,18 @@ public class import_df_structures extends GhidraScript {
 		return createDataType(dtcStd, set);
 	}
 
-	private DataType createMapType(DataType target) throws Exception {
-		if (target == null)
-			target = DataType.DEFAULT;
+	private DataType createMapType(DataType key, DataType val) throws Exception {
+		if (key == null)
+			key = DataType.DEFAULT;
+		if (val == null)
+			val = DataType.DEFAULT;
 
-		var name = "map<" + target.getName() + ">";
+		var name = "map<" + key.getName() + "," + val.getName() + ">";
 		var existing = dtcStd.getDataType(name);
 		if (existing != null && !existing.isNotYetDefined())
 			return existing;
 
-		Structure node = new StructureDataType("_Rb_tree_node<" + target.getName() + ">", 0);
+		Structure node = new StructureDataType("_Rb_tree_node<" + key.getName() + ">", 0);
 		node.setToDefaultAligned();
 		node.setPackingEnabled(true);
 		node = (Structure) createDataType(dtcStd, node);
@@ -327,7 +329,7 @@ public class import_df_structures extends GhidraScript {
 
 			set.add(Undefined1DataType.dataType, "_M_key_compare", null);
 
-			Structure nodeBase = new StructureDataType("_Rb_tree_node_base<" + target.getName() + ">", 0);
+			Structure nodeBase = new StructureDataType("_Rb_tree_node_base<" + key.getName() + ">", 0);
 			nodeBase.setToDefaultAligned();
 			nodeBase.setPackingEnabled(true);
 			nodeBase = (Structure) createDataType(dtcStd, nodeBase);
@@ -350,18 +352,20 @@ public class import_df_structures extends GhidraScript {
 			set.add(dtm.getPointer(node), "_Myhead", null);
 		}
 
-		node.add(target, "_M_value_field", null);
+		node.add(key, "_M_value_field", null);
 
 		set.add(dtSizeT, "_M_node_count", null);
 
 		return createDataType(dtcStd, set);
 	}
 
-	private DataType createUnorderedMapType(DataType target) throws Exception {
-		if (target == null)
-			target = DataType.DEFAULT;
+	private DataType createUnorderedMapType(DataType key, DataType val) throws Exception {
+		if (key == null)
+			key = DataType.DEFAULT;
+		if (val == null)
+			val = DataType.DEFAULT;
 
-		var name = "unordered_map<" + target.getName() + ">";
+		var name = "unordered_map<" + key.getName() + "," + val.getName() + ">";
 		var existing = dtcStd.getDataType(name);
 		if (existing != null && !existing.isNotYetDefined())
 			return existing;
@@ -383,6 +387,34 @@ public class import_df_structures extends GhidraScript {
 
 		return createDataType(dtcStd, set);
 	}
+
+		private DataType createUnorderedSetType(DataType target) throws Exception {
+		if (target == null)
+			target = DataType.DEFAULT;
+
+		var name = "unordered_set<" + target.getName() + ">";
+		var existing = dtcStd.getDataType(name);
+		if (existing != null && !existing.isNotYetDefined())
+			return existing;
+
+		var set = new StructureDataType(name, 0);
+		set.setToDefaultAligned();
+		set.setPackingEnabled(true);
+
+		var fillptr = dtm.getPointer(null);
+
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+		set.add(fillptr,"",null);
+
+		return createDataType(dtcStd, set);
+	}
+
 
 	private DataType createDfArrayType(DataType target) throws Exception {
 		if (target == null)
@@ -748,6 +780,8 @@ public class import_df_structures extends GhidraScript {
 			public boolean forceEnumSize;
 			public String comment = "";
 			public String initValue = "";
+			public Field keyType;
+			public Field valueType;
 
 			@Override
 			public void setMeta(String meta) {
@@ -1068,6 +1102,16 @@ public class import_df_structures extends GhidraScript {
 						vta = new SymbolTable.VTableAddress();
 						st.vtables.add(vta);
 						stack.push(vta);
+						break;
+					case "key-type":
+						var key_item = new TypeDef.Field();
+						((TypeDef.Field) stack.peek()).keyType = key_item;
+						stack.push(key_item);
+						break;
+					case "value-type":
+						var val_item = new TypeDef.Field();
+						((TypeDef.Field) stack.peek()).valueType = val_item;
+						stack.push(val_item);
 						break;
 					default:
 						printerr("Unhandled XML element name: " + reader.getLocalName());
@@ -1517,10 +1561,16 @@ public class import_df_structures extends GhidraScript {
 				return createFunctionType(f.item == null ? null : getDataType(f.item));
 			case "stl-set":
 				return createSetType(f.item == null ? null : getDataType(f.item));
+			case "stl-unordered-set":
+				return createUnorderedSetType(f.item == null ? null : getDataType(f.item));
 			case "stl-map":
-				return createMapType(f.item == null ? null : getDataType(f.item));
+				return createMapType(
+					f.keyType == null ? null : getDataType(f.keyType),
+					f.valueType == null ? null : getDataType(f.valueType));
 			case "stl-unordered-map":
-				return createUnorderedMapType(f.item == null ? null : getDataType(f.item));
+				return createUnorderedMapType(
+					f.keyType == null ? null : getDataType(f.keyType),
+					f.valueType == null ? null : getDataType(f.valueType));
 			case "stl-deque":
 				return dtcStd.addDataType(new TypedefDataType(
 						"deque<" + (f.item == null ? DataType.DEFAULT : getDataType(f.item)).getName() + ">", dtDeque),
@@ -2022,13 +2072,10 @@ public class import_df_structures extends GhidraScript {
 			var funcType = (FunctionDefinition) ((Pointer) field.getDataType()).getDataType();
 			var cmd = new CreateFunctionCmd(field.getFieldName(), fnaddr, null, SourceType.IMPORTED);
 			Function func;
-			if (cmd.applyTo(currentProgram)) {
-				func = cmd.getFunction();
-			} else {
-				func = currentProgram.getListing().getFunctionAt(fnaddr);
-				if (func != null && !func.getSignatureSource().isLowerPriorityThan(SourceType.IMPORTED)) {
-					func = null;
-				}
+			cmd.applyTo(currentProgram);
+			func = currentProgram.getListing().getFunctionAt(fnaddr);
+			if (func != null && !func.getSignatureSource().isLowerPriorityThan(SourceType.IMPORTED)) {
+				func = null;
 			}
 			if (func != null) {
 				func.setName(field.getFieldName(), SourceType.IMPORTED);
