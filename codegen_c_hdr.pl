@@ -27,7 +27,7 @@ my $stdc = grep { $_ eq '--stdc' } @ARGV;
 my $bin32 = grep { $_ eq '--32' } @ARGV;
    @ARGV  = grep { $_ ne '--32' } @ARGV if $bin32;
 
-my $input = $ARGV[0] || 'codegen/codegen.out.xml';
+my $input = $ARGV[0] || 'codegen.out.xml';
 my $output = $ARGV[1] || 'codegen.h';
 
 
@@ -422,7 +422,16 @@ sub render_item_global {
 
     my $typename = $item->getAttribute('type-name');
     my $subtype = $item->getAttribute('ld:subtype');
-    my $type = $global_types{$typename};
+    my $type = $global_types{$typename} if $typename;
+
+    if (!$type) {
+        print "unknown global type $typename\n" if $typename;
+        fwd_decl_class($typename) if $typename;
+        push @lines, "struct $typename";
+        $lines[$#lines] .= " $name" if ($name);
+        return;
+    }
+
     my $tname = $type->getAttribute('original-name') ||
             $type->getAttribute('type-name') ||
             $typename;
@@ -641,44 +650,67 @@ sub render_item_staticarray {
     if ($name and $name =~ /^\*/) {
         render_item($tg, "*${name}");
     } else {
-        render_item($tg, "${name}[$count]");
+        render_item($tg, $name . "[$count]");
     }
 }
 
 sub render_item_primitive {
     my ($item, $name) = @_;
 
-    my $subtype = $item->getAttribute('ld:subtype');
+    my $subtype = $item->getAttribute('ld:subtype') || '';
     if ($subtype eq 'stl-string') {
-        push @lines, "struct stl_string";
-        $lines[$#lines] .= " $name" if ($name);
+        push @lines, "struct stl_string $name";
     } elsif ($subtype eq 'stl-fstream') {
         if ($linux) {
-            push @lines, "int32_t fstream[71]";     # (284 bytes, 4o align)
+            push @lines, "int32_t " . $name . "[71]";     # (284 bytes, 4o align)
         } else {
-            push @lines, "int64_t fstream[35]";     # (280 bytes, 8o align)
+            push @lines, "int64_t " . $name . "[35]";     # (280 bytes, 8o align)
         }
+    } elsif ($subtype eq 'stl-mutex') {
+        if ($linux) {
+            # 40 bytes on glibc
+            push @lines, "int64_t " . $name . "[5]";
+        } else {
+            # 80 bytes on msvc
+            push @lines, "int64_t " . $name . "[10]";
+        }
+    } elsif ($subtype eq 'stl-condition-variable') {
+        if ($linux) {
+            # 48 bytes on glibc
+            push @lines, "int64_t " . $name . "[6]";
+        } else {
+            # 8 bytes on msvc
+            push @lines, "int64_t " . $name . "[1]";
+        }
+    } elsif ($subtype eq 'stl-fs-path') {
+        push @lines, "struct stl_string $name";
+    } elsif ($subtype eq 'stl-future') {
+        # roughly a pointer
+        push @lines, "void *${name}";
     } else {
         print "no render primitive $subtype\n";
+        push @lines, "/* UNKNOWN primitive: $subtype */ $name";
     }
 }
 
 sub render_item_bytes {
     my ($item, $name) = @_;
 
-    my $subtype = $item->getAttribute('ld:subtype');
+    my $subtype = $item->getAttribute('ld:subtype') || '';
     if ($subtype eq 'padding') {
         my $size = $item->getAttribute('size');
         push @lines, "char ${name}[$size]";
     } elsif ($subtype eq 'static-string') {
         my $size = $item->getAttribute('size');
         if ($size) {
-            push @lines, "char ${name}[$size]";
+            push @lines, "char ". $name . "[$size]";
         } else {
             push @lines, "char *${name}";
         }
     } else {
         print "no render bytes $subtype\n";
+        my $size = $item->getAttribute('size') || 1;
+        push @lines, "char ${name}[$size]";
     }
 }
 
@@ -776,7 +808,7 @@ struct stl_vector_bool {
 EOS
 }
 
-foreach my $vtype ('ptr', 'strptr', 'int32_t', 'uint32_t', 'int16_t', 'uint16_t', 'int8_t', 'uint8_t') {
+foreach my $vtype ('ptr', 'strptr', 'long', 'int32_t', 'uint32_t', 'int16_t', 'uint16_t', 'int8_t', 'uint8_t') {
     my $ctype = $vtype . ' ';
     $ctype = 'void *' if ($vtype eq 'ptr');
     $ctype = 'struct stl_string *' if ($vtype eq 'strptr');
