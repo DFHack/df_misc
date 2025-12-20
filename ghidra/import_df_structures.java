@@ -82,7 +82,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private void updateProgressMajor(String message) throws Exception {
-		monitor.checkCanceled();
+		monitor.checkCancelled();
 
 		monitor.initialize(TaskMonitor.NO_PROGRESS_VALUE);
 		monitor.setMessage(message);
@@ -90,7 +90,7 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createDataType(Category category, DataType dt) throws Exception {
-		monitor.checkCanceled();
+		monitor.checkCancelled();
 
 		dt = category.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
 		debugln("created data type " + category.getName() + "::" + dt.getName());
@@ -1409,7 +1409,7 @@ public class import_df_structures extends GhidraScript {
 		monitor.initialize(codegen.types.size());
 		int i = 0;
 		for (var t : codegen.types) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			monitor.setMessage("Creating data types ("+ t.getName() +")...");
 			createDataType(t);
 			i++;
@@ -2225,7 +2225,7 @@ public class import_df_structures extends GhidraScript {
 		updateProgressMajor("Annotating global table...");
 
 		var stringPointer = dtm.getPointer(TerminatedStringDataType.dataType);
-		var voidPointer = dtm.getPointer(DataType.VOID);
+		var voidPointer = dtm.getPointer(VoidDataType.dataType);
 		Structure globalTableEntryType = new StructureDataType("global_variable_table_entry", 0);
 
 		globalTableEntryType.setToDefaultAligned();
@@ -2274,18 +2274,18 @@ public class import_df_structures extends GhidraScript {
 
 		var addr = start;
 		while (true) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			addr = addr.addNoWrap(globalTableEntryType.getLength());
 			long nameAddr = mem.getLong(addr);
 			long dataAddr;
-			long dataLength;
 			if (currentProgram.getDefaultPointerSize() == 4) {
 				dataAddr = nameAddr >>> 32;
 				nameAddr = nameAddr & 0xffffffffL;
 			} else {
 				dataAddr = mem.getLong(addr.addNoWrap(8));
 				if (isExtended) {
-					dataLength = mem.getLong(addr.addNoWrap(16));
+					// we don't use the length field here, yet
+					mem.getLong(addr.addNoWrap(16));
 				}
 			}
 
@@ -2370,15 +2370,15 @@ public class import_df_structures extends GhidraScript {
 				}
 			}
 			var ns = ensureDemangledClass(demangled.getNamespace(), global);
-			if (ns.getSymbol().getSymbolType() == global.getSymbol().getSymbolType()
-					&& !sym.getName().startsWith("operator.") && !Character.isUpperCase(sym.getName().charAt(0))
-					&& !sym.getName().equals("itoa")) {
-				var dfns = ns;
-				if (dfns == null) {
-					dfns = ns;
-				}
-				ns = dfns;
-			}
+			// if (ns.getSymbol().getSymbolType() == global.getSymbol().getSymbolType()
+			// 		&& !sym.getName().startsWith("operator.") && !Character.isUpperCase(sym.getName().charAt(0))
+			// 		&& !sym.getName().equals("itoa")) {
+			// 	var dfns = ns;
+			// 	if (dfns == null) {
+			// 		dfns = ns;
+			// 	}
+			// 	ns = dfns;
+			// }
 			if (ns.getSymbol().getSymbolType() == SymbolType.CLASS
 					&& ns.getParentNamespace().getSymbol().getSymbolType() == SymbolType.LIBRARY) {
 				println(ns.getName());
@@ -2431,14 +2431,14 @@ public class import_df_structures extends GhidraScript {
 		}
 		var parent = ensureDemangledClass(namespace.getNamespace(), global);
 		var name = namespace.getName();
-		if (parent.getSymbol().getSymbolType() == global.getSymbol().getSymbolType() && (name.endsWith("st")
-				|| name.startsWith("renderer_") || name.equals("textures") || name.equals("KeybindingScreen"))) {
-			var dfns = parent;
-			if (dfns == null) {
-				dfns = parent;
-			}
-			parent = dfns;
-		}
+		// if (parent.getSymbol().getSymbolType() == global.getSymbol().getSymbolType() && (name.endsWith("st")
+		// 		|| name.startsWith("renderer_") || name.equals("textures") || name.equals("KeybindingScreen"))) {
+		// 	var dfns = parent;
+		// 	if (dfns == null) {
+		// 		dfns = parent;
+		// 	}
+		// 	parent = dfns;
+		// }
 		// special case: these are in the STL
 		if (name.equals("std") || name.startsWith("__cxx")) {
 			var ns = symtab.getNamespace(namespace.getName(), global);
@@ -2482,52 +2482,52 @@ public class import_df_structures extends GhidraScript {
 		return realClass;
 	}
 
-	private void setThunkNamespaces() throws Exception {
-		updateProgressMajor("Fixing up thunk namespaces...");
-		for (var fn : currentProgram.getFunctionManager().getFunctions(true)) {
-			if (!fn.isThunk()) {
-				continue;
-			}
+	// private void setThunkNamespaces() throws Exception {
+	// 	updateProgressMajor("Fixing up thunk namespaces...");
+	// 	for (var fn : currentProgram.getFunctionManager().getFunctions(true)) {
+	// 		if (!fn.isThunk()) {
+	// 			continue;
+	// 		}
 
-			var thunked = fn.getThunkedFunction(true);
-			var root = fn.getParentNamespace();
-			while (root.getSymbol().getSymbolType() != SymbolType.GLOBAL
-					&& root.getSymbol().getSymbolType() != SymbolType.LIBRARY) {
-				root = root.getParentNamespace();
-			}
-			var parent = buildMatchingNamespaceChain(root, thunked.getParentNamespace());
-			fn.setParentNamespace(parent);
-		}
-	}
+	// 		var thunked = fn.getThunkedFunction(true);
+	// 		var root = fn.getParentNamespace();
+	// 		while (root.getSymbol().getSymbolType() != SymbolType.GLOBAL
+	// 				&& root.getSymbol().getSymbolType() != SymbolType.LIBRARY) {
+	// 			root = root.getParentNamespace();
+	// 		}
+	// 		var parent = buildMatchingNamespaceChain(root, thunked.getParentNamespace());
+	// 		fn.setParentNamespace(parent);
+	// 	}
+	// }
 
-	private Namespace buildMatchingNamespaceChain(Namespace root, Namespace target) throws Exception {
-		if (target.getSymbol().getSymbolType() == SymbolType.GLOBAL
-				|| target.getSymbol().getSymbolType() == SymbolType.LIBRARY) {
-			return root;
-		}
-		var parent = buildMatchingNamespaceChain(root, target.getParentNamespace());
-		var ns = symtab.getNamespace(target.getName(), parent);
-		if (target.getSymbol().getSymbolType() == SymbolType.CLASS) {
-			if (ns == null) {
-				return symtab.createClass(parent, target.getName(), SourceType.IMPORTED);
-			}
-			if (!(ns instanceof GhidraClass)) {
-				throw new Exception("expected " + ns.getName(true) + " to be a class to match " + target.getName(true));
-			}
-			return ns;
-		}
-		if (target.getSymbol().getSymbolType() == SymbolType.NAMESPACE) {
-			if (ns == null) {
-				return symtab.createNameSpace(parent, target.getName(), SourceType.IMPORTED);
-			}
-			if (ns instanceof GhidraClass) {
-				throw new Exception(
-						"expected " + ns.getName(true) + " to be a namespace to match " + target.getName(true));
-			}
-			return ns;
-		}
-		throw new Exception("unexpected symbol type: " + target.getSymbol().getSymbolType());
-	}
+	// private Namespace buildMatchingNamespaceChain(Namespace root, Namespace target) throws Exception {
+	// 	if (target.getSymbol().getSymbolType() == SymbolType.GLOBAL
+	// 			|| target.getSymbol().getSymbolType() == SymbolType.LIBRARY) {
+	// 		return root;
+	// 	}
+	// 	var parent = buildMatchingNamespaceChain(root, target.getParentNamespace());
+	// 	var ns = symtab.getNamespace(target.getName(), parent);
+	// 	if (target.getSymbol().getSymbolType() == SymbolType.CLASS) {
+	// 		if (ns == null) {
+	// 			return symtab.createClass(parent, target.getName(), SourceType.IMPORTED);
+	// 		}
+	// 		if (!(ns instanceof GhidraClass)) {
+	// 			throw new Exception("expected " + ns.getName(true) + " to be a class to match " + target.getName(true));
+	// 		}
+	// 		return ns;
+	// 	}
+	// 	if (target.getSymbol().getSymbolType() == SymbolType.NAMESPACE) {
+	// 		if (ns == null) {
+	// 			return symtab.createNameSpace(parent, target.getName(), SourceType.IMPORTED);
+	// 		}
+	// 		if (ns instanceof GhidraClass) {
+	// 			throw new Exception(
+	// 					"expected " + ns.getName(true) + " to be a namespace to match " + target.getName(true));
+	// 		}
+	// 		return ns;
+	// 	}
+	// 	throw new Exception("unexpected symbol type: " + target.getSymbol().getSymbolType());
+	// }
 
 	private void findLibrary(List<String> locations, String name, DomainFolder folder) {
 		var file = folder.getFile(name);
