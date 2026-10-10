@@ -52,7 +52,7 @@ public class import_df_structures extends GhidraScript {
 	private DataType dtUint8, dtUint16, dtUint32, dtUint64;
 	private DataType dtInt8, dtInt16, dtInt32, dtInt64;
 	private DataType dtInt, dtLong, dtULong, dtSizeT;
-	private DataType dtString, dtFStream, dtMutex, dtConditionVariable, dtFuture, dtFsPath, dtVectorBool, dtDeque;
+	private DataType dtString, dtFStream, dtMutex, dtConditionVariable, dtFuture, dtFsPath, dtFsFiletime, dtVectorBool, dtDeque;
 	private Structure classTypeInfo, subClassTypeInfo, vmiClassTypeInfo;
 	private Address classVTable, subClassVTable, vmiClassVTable;
 	private int baseClassPadding;
@@ -454,6 +454,8 @@ public class import_df_structures extends GhidraScript {
 				AbstractIntegerDataType.getUnsignedDataType(currentProgram.getDefaultPointerSize(), dtm));
 		this.dtInt = createDataType(dtcStd, "int", AbstractIntegerDataType.getSignedDataType(4, dtm));
 
+		var fsFiletimeDataType = createDataType(dtcStd, "fsFiletime", AbstractIntegerDataType.getUnsignedDataType(8, dtm));
+
 		var stringDataType = new StructureDataType("string", 0);
 		var bitVecDataType = new StructureDataType("vector<bool>", 0);
 		var fStreamDataType = new StructureDataType("fstream", 0);
@@ -628,6 +630,7 @@ public class import_df_structures extends GhidraScript {
 		this.dtConditionVariable = createDataType(dtcStd, conditionVariableDataType);
 		this.dtFuture = createDataType(dtcStd, futureDataType);
 		this.dtFsPath = createDataType(dtcStd, fsPathDataType);
+		this.dtFsFiletime = createDataType(dtcStd, fsFiletimeDataType);
 		this.dtString = createDataType(dtcStd, stringDataType);
 		this.dtVectorBool = createDataType(dtcStd, bitVecDataType);
 		this.dtDeque = createDataType(dtcStd, dequeDataType);
@@ -1541,6 +1544,8 @@ public class import_df_structures extends GhidraScript {
 				return dtFuture;
 			case "stl-fs-path":
 				return dtFsPath;
+			case "stl-fs-filetime":
+				return dtFsFiletime;
 			}
 			break;
 		case "container":
