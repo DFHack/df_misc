@@ -45,7 +45,10 @@ public class DFSTLTypes extends GhidraScript {
     }
 
     void field(StructureDataType s, int off, String spec, String fname) throws Exception {
-        s.replaceAtOffset(off, dt(spec), -1, fname, null);
+        DataType f = dt(spec);
+        int need = off + Math.max(1, f.getLength());
+        if (s.getLength() < need) s.growStructure(need - s.getLength());
+        s.replaceAtOffset(off, f, -1, fname, null);
     }
 
     public void run() throws Exception {
