@@ -1,16 +1,15 @@
+// DFSTLTypes — creates the MSVC STL-support data types used by DFSTLApply
+// signatures (and useful generally).  Run this FIRST when starting analysis
+// of a new DF build (before df-structures import), so that function
+// signatures referencing these types can transfer via Version Tracking.
+// Idempotent: existing types with the same name are left untouched.
+//@category DFHack
+
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.data.*;
 import ghidra.util.data.DataTypeParser;
 import java.util.*;
 
-/**
- * DFSTLTypes — creates the MSVC STL-support data types used by DFSTLApply
- * signatures (and useful generally).  Run this FIRST when starting analysis
- * of a new DF build (before df-structures import), so that function
- * signatures referencing these types can transfer via Version Tracking.
- *
- * Idempotent: existing types with the same name are left untouched.
- */
 public class DFSTLTypes extends GhidraScript {
 
     DataTypeManager dtm;
