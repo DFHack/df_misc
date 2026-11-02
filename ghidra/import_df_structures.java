@@ -766,6 +766,11 @@ public class import_df_structures extends GhidraScript {
 	private static class TypeDef implements ILoweredData, IOwnsType, IHasFields, IHasComment {
 		public static class EnumItem extends NameValueHaver implements IHasComment {
 			public String comment;
+			public String originalName;
+
+			public String getName() {
+				return originalName != null ? originalName : name;
+			}
 
 			@Override
 			public void setComment(String comment) {
@@ -793,6 +798,7 @@ public class import_df_structures extends GhidraScript {
 			public boolean forceEnumSize;
 			public String comment = "";
 			public String initValue = "";
+			public String originalName;
 			public Field keyType;
 			public Field valueType;
 
@@ -1260,6 +1266,10 @@ public class import_df_structures extends GhidraScript {
 						case "original-name":
 							if (stack.peek() instanceof TypeDef.VMethod)
 								((TypeDef.VMethod) stack.peek()).originalName = reader.getAttributeValue(i);
+							else if (stack.peek() instanceof TypeDef.EnumItem)
+								((TypeDef.EnumItem) stack.peek()).originalName = reader.getAttributeValue(i);
+							else if (stack.peek() instanceof TypeDef.Field)
+								((TypeDef.Field) stack.peek()).originalName = reader.getAttributeValue(i);
 							else if (stack.peek() instanceof TypeDef)
 								((IOwnsType) stack.peek()).getOwnedType().originalName = reader.getAttributeValue(i);
 							break;
@@ -1681,7 +1691,9 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createBitArrayType(String enumName) throws Exception {
-		var name = "BitArray<" + (enumName == null ? "" : enumName) + ">";
+		var et = enumName == null ? null : this.codegen.typesByName.get(enumName);
+		var ename = et != null ? et.getName() : (enumName == null ? "" : enumName);
+		var name = "BitArray<" + ename + ">";
 		var dt = dtcBitArrays.getDataType(name);
 		if (dt != null)
 			return dt;
@@ -1693,13 +1705,12 @@ public class import_df_structures extends GhidraScript {
 			bitsStruct.setPackingEnabled(true);
 			bitsStruct = (Structure) dtcBitArrays.addDataType(bitsStruct, DataTypeConflictHandler.REPLACE_HANDLER);
 
-			var et = this.codegen.typesByName.get(enumName);
 			et.enumRequiredBits(); // ensure enumItemsMax is set
 			var bytes = (int) et.enumItemsMax / 8 + 1;
 			var byteEnums = new ghidra.program.model.data.Enum[bytes];
 			for (int i = 0; i < bytes; i++) {
 				var byteEnum = new EnumDataType(name + "_bits_" + i, 1);
-				byteEnum.add("none_of_" + enumName, 0);
+				byteEnum.add("none_of_" + ename, 0);
 				byteEnums[i] = (ghidra.program.model.data.Enum) dtcBitArrays.addDataType(byteEnum,
 						DataTypeConflictHandler.REPLACE_HANDLER);
 				bitsStruct.add(byteEnums[i], "bits_" + i, null);
@@ -1709,9 +1720,9 @@ public class import_df_structures extends GhidraScript {
 			for (var ei : et.enumItems) {
 				long value = ei.hasValue ? ei.value : (prevValue + 1);
 				if (value < 0) continue;
-				var valueName = ei.hasName ? ei.name : ("_unk_" + value);
+				var valueName = ei.getName() != null ? ei.getName() : ("_unk_" + value);
 				prevValue = value;
-				byteEnums[(int) (value / 8)].add(enumName + "_" + valueName, 1 << (value % 8));
+				byteEnums[(int) (value / 8)].add(ename + "_" + valueName, 1 << (value % 8));
 			}
 
 			bitsType = bitsStruct;
@@ -1763,6 +1774,7 @@ public class import_df_structures extends GhidraScript {
 			return createArrayDataType(item, count, null);
 		}
 
+		var indexEnumDisplayName = indexEnum.getName();
 		var names = new String[count];
 		long prevValue = -1;
 		for (var ei : indexEnum.enumItems) {
@@ -1773,18 +1785,18 @@ public class import_df_structures extends GhidraScript {
 				value = prevValue + 1;
 			}
 			prevValue = value;
-			if (ei.hasName && value >= 0 && value < names.length) {
-				names[(int) value] = ei.name;
+			if (ei.getName() != null && value >= 0 && value < names.length) {
+				names[(int) value] = ei.getName();
 			}
 		}
 
-		var dt = new StructureDataType(item.getName() + "[<" + indexEnumName + ">" + count + "]", 0);
+		var dt = new StructureDataType(item.getName() + "[<" + indexEnumDisplayName + ">" + count + "]", 0);
 		dt.setToDefaultAligned();
 		dt.setPackingEnabled(true);
 		for (int i = 0; i < count; i++) {
 			String indexEnumComment = i < indexEnum.enumItems.size() ? indexEnum.enumItems.get(i).getComment() : null;
 			if (names[i] == null) {
-				dt.add(item, indexEnumName + "_anon_" + i, indexEnumComment);
+				dt.add(item, indexEnumDisplayName + "_anon_" + i, indexEnumComment);
 			} else {
 				dt.add(item, names[i], indexEnumComment);
 			}
@@ -1798,7 +1810,7 @@ public class import_df_structures extends GhidraScript {
 		long prevValue = -1;
 		for (var ei : t.enumItems) {
 			long value = ei.hasValue ? ei.value : prevValue + 1;
-			String key = ei.hasName ? ei.name : "_unk_" + value;
+			String key = ei.getName() != null ? ei.getName() : "_unk_" + value;
 			et.add(key, value, ei.getComment());
 			prevValue = value;
 		}
@@ -1987,7 +1999,9 @@ public class import_df_structures extends GhidraScript {
 		long mask = 1;
 		for (var f : t.fields) {
 			String name = null;
-			if (f.hasName)
+			if (f.originalName != null)
+				name = f.originalName;
+			else if (f.hasName)
 				name = t.getName() + "_" + f.name;
 			else if (f.hasAnonName)
 				name = t.getName() + "_" + f.anonName;
