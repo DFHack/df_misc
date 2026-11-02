@@ -848,6 +848,7 @@ public class import_df_structures extends GhidraScript {
 			public final List<Field> arguments = new ArrayList<>();
 			public Field returnType;
 			public boolean isDestructor;
+			public String originalName;
 			public String comment = "";
 
 			@Override
@@ -1257,7 +1258,9 @@ public class import_df_structures extends GhidraScript {
 							// ignore
 							break;
 						case "original-name":
-							if (stack.peek() instanceof TypeDef)
+							if (stack.peek() instanceof TypeDef.VMethod)
+								((TypeDef.VMethod) stack.peek()).originalName = reader.getAttributeValue(i);
+							else if (stack.peek() instanceof TypeDef)
 								((IOwnsType) stack.peek()).getOwnedType().originalName = reader.getAttributeValue(i);
 							break;
 						case "is-union":
@@ -1917,7 +1920,9 @@ public class import_df_structures extends GhidraScript {
 				continue;
 			}
 
-			if (vm.hasName)
+			if (vm.originalName != null)
+				mname = vm.originalName;
+			else if (vm.hasName)
 				mname = vm.name;
 			else if (vm.hasAnonName)
 				mname = t.getName() + "_" + vm.anonName;
