@@ -48,7 +48,9 @@ public class import_df_structures extends GhidraScript {
 	private SymbolTable symbolTable;
 	private ghidra.program.model.symbol.SymbolTable symtab;
 	private DataTypeManager dtm;
-	private Category dtc, dtcStd, dtcEnums, dtcVTables, dtcVMethods;
+	private Category dtc, dtcStd, dtcStdFs;
+	private Category dtcBitfields, dtcUnions, dtcStructs, dtcVTables, dtcVMethods;
+	private Category dtcEnums, dtcVectors, dtcArrays, dtcBitArrays, dtcTypedefs;
 	private DataType dtUint8, dtUint16, dtUint32, dtUint64;
 	private DataType dtInt8, dtInt16, dtInt32, dtInt64;
 	private DataType dtInt, dtLong, dtULong, dtSizeT;
@@ -115,7 +117,7 @@ public class import_df_structures extends GhidraScript {
 			target = dtInt8;
 		var name = "vector<" + target.getName() + ">";
 
-		var existing = dtcStd.getDataType(name);
+		var existing = dtcVectors.getDataType(name);
 		if (existing != null)
 			return existing;
 
@@ -129,7 +131,7 @@ public class import_df_structures extends GhidraScript {
 		vec.add(ptr, "_M_finish", null);
 		vec.add(ptr, "_M_end_of_storage", null);
 
-		return createDataType(dtcStd, vec);
+		return createDataType(dtcVectors, vec);
 	}
 
 	private DataType createOptionalType(DataType target) throws Exception {
@@ -422,7 +424,7 @@ public class import_df_structures extends GhidraScript {
 		var ptr = dtm.getPointer(target);
 		var name = "DfArray<" + target.getName() + ">";
 
-		var existing = dtc.getDataType(name);
+		var existing = dtcVectors.getDataType(name);
 		if (existing != null)
 			return existing;
 
@@ -432,16 +434,27 @@ public class import_df_structures extends GhidraScript {
 		arr.add(ptr, "ptr", null);
 		arr.add(dtInt, "length", null);
 
-		return createDataType(dtc, arr);
+		return createDataType(dtcVectors, arr);
 	}
 
 	private void createStdDataTypes() throws Exception {
 		symtab = currentProgram.getSymbolTable();
 		dtm = currentProgram.getDataTypeManager();
 		dtc = dtm.createCategory(new CategoryPath("/df"));
+		dtcBitfields = dtc.createCategory("bitfields");
+		dtcUnions = dtc.createCategory("unions");
+		dtcStructs = dtc.createCategory("structs");
+		dtcVTables = dtc.createCategory("vtables");
+		dtcVMethods = dtcVTables.createCategory("methods");
+		dtcEnums = dtc.createCategory("enums");
+		dtcVectors = dtc.createCategory("vectors");
+		dtcArrays = dtc.createCategory("arrays");
+		dtcBitArrays = dtc.createCategory("BitArrays");
+		dtcTypedefs = dtc.createCategory("typedefs");
 
 		updateProgressMajor("creating stdlib types...");
 		dtcStd = dtm.getRootCategory().createCategory("std");
+		dtcStdFs = dtcStd.createCategory("filesystem");
 		this.dtUint8 = createDataType(dtcStd, "uint8_t", AbstractIntegerDataType.getUnsignedDataType(1, dtm));
 		this.dtUint16 = createDataType(dtcStd, "uint16_t", AbstractIntegerDataType.getUnsignedDataType(2, dtm));
 		this.dtUint32 = createDataType(dtcStd, "uint32_t", AbstractIntegerDataType.getUnsignedDataType(4, dtm));
@@ -454,7 +467,7 @@ public class import_df_structures extends GhidraScript {
 				AbstractIntegerDataType.getUnsignedDataType(currentProgram.getDefaultPointerSize(), dtm));
 		this.dtInt = createDataType(dtcStd, "int", AbstractIntegerDataType.getSignedDataType(4, dtm));
 
-		var fsFiletimeDataType = createDataType(dtcStd, "fsFiletime", AbstractIntegerDataType.getUnsignedDataType(8, dtm));
+		var fsFiletimeDataType = createDataType(dtcStdFs, "fsFiletime", AbstractIntegerDataType.getUnsignedDataType(8, dtm));
 
 		var stringDataType = new StructureDataType("string", 0);
 		var bitVecDataType = new StructureDataType("vector<bool>", 0);
@@ -629,14 +642,11 @@ public class import_df_structures extends GhidraScript {
 		this.dtMutex = createDataType(dtcStd, mutexDataType);
 		this.dtConditionVariable = createDataType(dtcStd, conditionVariableDataType);
 		this.dtFuture = createDataType(dtcStd, futureDataType);
-		this.dtFsPath = createDataType(dtcStd, fsPathDataType);
-		this.dtFsFiletime = createDataType(dtcStd, fsFiletimeDataType);
+		this.dtFsPath = createDataType(dtcStdFs, fsPathDataType);
+		this.dtFsFiletime = createDataType(dtcStdFs, fsFiletimeDataType);
 		this.dtString = createDataType(dtcStd, stringDataType);
-		this.dtVectorBool = createDataType(dtcStd, bitVecDataType);
+		this.dtVectorBool = createDataType(dtcVectors, bitVecDataType);
 		this.dtDeque = createDataType(dtcStd, dequeDataType);
-		this.dtcEnums = dtc.createCategory("enums");
-		this.dtcVTables = dtc.createCategory("vtables");
-		this.dtcVMethods = dtcVTables.createCategory("methods");
 
 		// some types that are created by the demangler
 		var dtcDemangler = dtm.getRootCategory().createCategory("Demangler");
@@ -756,6 +766,11 @@ public class import_df_structures extends GhidraScript {
 	private static class TypeDef implements ILoweredData, IOwnsType, IHasFields, IHasComment {
 		public static class EnumItem extends NameValueHaver implements IHasComment {
 			public String comment;
+			public String originalName;
+
+			public String getName() {
+				return originalName != null ? originalName : name;
+			}
 
 			@Override
 			public void setComment(String comment) {
@@ -783,6 +798,7 @@ public class import_df_structures extends GhidraScript {
 			public boolean forceEnumSize;
 			public String comment = "";
 			public String initValue = "";
+			public String originalName;
 			public Field keyType;
 			public Field valueType;
 
@@ -838,6 +854,7 @@ public class import_df_structures extends GhidraScript {
 			public final List<Field> arguments = new ArrayList<>();
 			public Field returnType;
 			public boolean isDestructor;
+			public String originalName;
 			public String comment = "";
 
 			@Override
@@ -1247,7 +1264,13 @@ public class import_df_structures extends GhidraScript {
 							// ignore
 							break;
 						case "original-name":
-							if (stack.peek() instanceof TypeDef)
+							if (stack.peek() instanceof TypeDef.VMethod)
+								((TypeDef.VMethod) stack.peek()).originalName = reader.getAttributeValue(i);
+							else if (stack.peek() instanceof TypeDef.EnumItem)
+								((TypeDef.EnumItem) stack.peek()).originalName = reader.getAttributeValue(i);
+							else if (stack.peek() instanceof TypeDef.Field)
+								((TypeDef.Field) stack.peek()).originalName = reader.getAttributeValue(i);
+							else if (stack.peek() instanceof TypeDef)
 								((IOwnsType) stack.peek()).getOwnedType().originalName = reader.getAttributeValue(i);
 							break;
 						case "is-union":
@@ -1459,6 +1482,21 @@ public class import_df_structures extends GhidraScript {
 
 	private HashSet<String> createdTypes;
 
+	private Category categoryFor(TypeDef t) {
+		switch (t.meta) {
+		case "bitfield-type":
+			return dtcBitfields;
+		case "struct-type":
+			return t.isUnion ? dtcUnions : dtcStructs;
+		case "static-array":
+			return dtcTypedefs;
+		case "enum-type":
+			return dtcEnums;
+		default:
+			return dtcStructs;
+		}
+	}
+
 	private DataType createDataType(TypeDef t) throws Exception {
 		if (t.meta.equals("enum-type")) {
 			int minSize = t.enumRequiredBits();
@@ -1469,7 +1507,7 @@ public class import_df_structures extends GhidraScript {
 			return getOrCreateEnumDataType(t, 0);
 		}
 		if (createdTypes.contains(t.getName()) ) {
-			var existing = dtc.getDataType(t.getName());
+			var existing = categoryFor(t).getDataType(t.getName());
 			if (existing != null)
 				return existing;
 		}
@@ -1488,7 +1526,7 @@ public class import_df_structures extends GhidraScript {
 			n = createClassDataType(t);
 			break;
 		case "static-array":
-			n = createDataType(dtc, t.getName(), getDataType(t.fields.get(0)));
+			n = createDataType(dtcTypedefs, t.getName(), getDataType(t.fields.get(0)));
 			break;
 		default:
 			throw new Exception("Unhandled type meta for " + t.getName() + ": " + t.meta);
@@ -1653,8 +1691,10 @@ public class import_df_structures extends GhidraScript {
 	}
 
 	private DataType createBitArrayType(String enumName) throws Exception {
-		var name = "BitArray<" + (enumName == null ? "" : enumName) + ">";
-		var dt = dtc.getDataType(name);
+		var et = enumName == null ? null : this.codegen.typesByName.get(enumName);
+		var ename = et != null ? et.getName() : (enumName == null ? "" : enumName);
+		var name = "BitArray<" + ename + ">";
+		var dt = dtcBitArrays.getDataType(name);
 		if (dt != null)
 			return dt;
 
@@ -1663,16 +1703,15 @@ public class import_df_structures extends GhidraScript {
 			Structure bitsStruct = new StructureDataType(name + "_bits", 0);
 			bitsStruct.setToDefaultAligned();
 			bitsStruct.setPackingEnabled(true);
-			bitsStruct = (Structure) dtc.addDataType(bitsStruct, DataTypeConflictHandler.REPLACE_HANDLER);
+			bitsStruct = (Structure) dtcBitArrays.addDataType(bitsStruct, DataTypeConflictHandler.REPLACE_HANDLER);
 
-			var et = this.codegen.typesByName.get(enumName);
 			et.enumRequiredBits(); // ensure enumItemsMax is set
 			var bytes = (int) et.enumItemsMax / 8 + 1;
 			var byteEnums = new ghidra.program.model.data.Enum[bytes];
 			for (int i = 0; i < bytes; i++) {
 				var byteEnum = new EnumDataType(name + "_bits_" + i, 1);
-				byteEnum.add("none_of_" + enumName, 0);
-				byteEnums[i] = (ghidra.program.model.data.Enum) dtc.addDataType(byteEnum,
+				byteEnum.add("none_of_" + ename, 0);
+				byteEnums[i] = (ghidra.program.model.data.Enum) dtcBitArrays.addDataType(byteEnum,
 						DataTypeConflictHandler.REPLACE_HANDLER);
 				bitsStruct.add(byteEnums[i], "bits_" + i, null);
 			}
@@ -1681,9 +1720,9 @@ public class import_df_structures extends GhidraScript {
 			for (var ei : et.enumItems) {
 				long value = ei.hasValue ? ei.value : (prevValue + 1);
 				if (value < 0) continue;
-				var valueName = ei.hasName ? ei.name : ("_unk_" + value);
+				var valueName = ei.getName() != null ? ei.getName() : ("_unk_" + value);
 				prevValue = value;
-				byteEnums[(int) (value / 8)].add(enumName + "_" + valueName, 1 << (value % 8));
+				byteEnums[(int) (value / 8)].add(ename + "_" + valueName, 1 << (value % 8));
 			}
 
 			bitsType = bitsStruct;
@@ -1695,7 +1734,7 @@ public class import_df_structures extends GhidraScript {
 		bitArrayDataType.add(dtm.getPointer(bitsType), "ptr", null);
 		bitArrayDataType.add(dtInt, "count", null);
 
-		return createDataType(dtc, bitArrayDataType);
+		return createDataType(dtcBitArrays, bitArrayDataType);
 	}
 
 	// Set a DataType's description based on its corresponding IHasComment implementation's comment field
@@ -1735,6 +1774,7 @@ public class import_df_structures extends GhidraScript {
 			return createArrayDataType(item, count, null);
 		}
 
+		var indexEnumDisplayName = indexEnum.getName();
 		var names = new String[count];
 		long prevValue = -1;
 		for (var ei : indexEnum.enumItems) {
@@ -1745,23 +1785,23 @@ public class import_df_structures extends GhidraScript {
 				value = prevValue + 1;
 			}
 			prevValue = value;
-			if (ei.hasName && value >= 0 && value < names.length) {
-				names[(int) value] = ei.name;
+			if (ei.getName() != null && value >= 0 && value < names.length) {
+				names[(int) value] = ei.getName();
 			}
 		}
 
-		var dt = new StructureDataType(item.getName() + "[<" + indexEnumName + ">" + count + "]", 0);
+		var dt = new StructureDataType(item.getName() + "[<" + indexEnumDisplayName + ">" + count + "]", 0);
 		dt.setToDefaultAligned();
 		dt.setPackingEnabled(true);
 		for (int i = 0; i < count; i++) {
 			String indexEnumComment = i < indexEnum.enumItems.size() ? indexEnum.enumItems.get(i).getComment() : null;
 			if (names[i] == null) {
-				dt.add(item, indexEnumName + "_anon_" + i, indexEnumComment);
+				dt.add(item, indexEnumDisplayName + "_anon_" + i, indexEnumComment);
 			} else {
 				dt.add(item, names[i], indexEnumComment);
 			}
 		}
-		return dtc.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
+		return dtcArrays.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
 	}
 
 	private DataType createEnumDataType(TypeDef t, String name, int size) throws Exception {
@@ -1770,7 +1810,7 @@ public class import_df_structures extends GhidraScript {
 		long prevValue = -1;
 		for (var ei : t.enumItems) {
 			long value = ei.hasValue ? ei.value : prevValue + 1;
-			String key = ei.hasName ? ei.name : "_unk_" + value;
+			String key = ei.getName() != null ? ei.getName() : "_unk_" + value;
 			et.add(key, value, ei.getComment());
 			prevValue = value;
 		}
@@ -1810,15 +1850,16 @@ public class import_df_structures extends GhidraScript {
 
 	private DataType createStructDataType(TypeDef t) throws Exception {
 		Composite st = t.isUnion ? new UnionDataType(t.getName()) : new StructureDataType(t.getName(), 0);
+		Category cat = t.isUnion ? dtcUnions : dtcStructs;
 		// add early to avoid recursion
-		st = (Composite) dtc.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
+		st = (Composite) cat.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAligned();
 		st.setPackingEnabled(true);
 
 		addDescriptionToDataType(st, t);
 		addStructFields(st, t);
 
-		return createDataType(dtc, st);
+		return createDataType(cat, st);
 	}
 
 	private DataType createMethodDataType(String name, TypeDef t, TypeDef.VMethod vm) throws Exception {
@@ -1891,7 +1932,9 @@ public class import_df_structures extends GhidraScript {
 				continue;
 			}
 
-			if (vm.hasName)
+			if (vm.originalName != null)
+				mname = vm.originalName;
+			else if (vm.hasName)
 				mname = vm.name;
 			else if (vm.hasAnonName)
 				mname = t.getName() + "_" + vm.anonName;
@@ -1907,17 +1950,17 @@ public class import_df_structures extends GhidraScript {
 	private Union findOrCreateBaseClassUnion(TypeDef t) throws Exception {
 		var typeName = "virtual_" + t.getName();
 		if (createdTypes.contains(typeName)) {
-			var existing = (Union) dtc.getDataType(typeName);
+			var existing = (Union) dtcUnions.getDataType(typeName);
 			if (existing != null)
 				return (Union) existing;
 		}
 		createdTypes.add(typeName);
 
 		var ut = new UnionDataType(typeName);
-		dtc.addDataType(ut, DataTypeConflictHandler.REPLACE_HANDLER);
+		dtcUnions.addDataType(ut, DataTypeConflictHandler.REPLACE_HANDLER);
 		ut.add(createDataType(t), t.getName(), t.getComment());
 
-		return (Union) createDataType(dtc, ut);
+		return (Union) createDataType(dtcUnions, ut);
 	}
 
 	private void addToBaseClassUnion(TypeDef t, Structure st) throws Exception {
@@ -1932,13 +1975,13 @@ public class import_df_structures extends GhidraScript {
 	private DataType createClassDataType(TypeDef t) throws Exception {
 		Structure st = new StructureDataType(t.getName(), 0);
 		// add early to avoid recursion
-		st = (Structure) dtc.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
+		st = (Structure) dtcStructs.addDataType(st, DataTypeConflictHandler.REPLACE_HANDLER);
 		st.setToDefaultAligned();
 		st.setPackingEnabled(true);
 		st.add(dtm.getPointer(createVTableDataType(t)), "_vtable", null);
 		addStructFields(st, t);
 
-		st = (Structure) createDataType(dtc, st);
+		st = (Structure) createDataType(dtcStructs, st);
 		st.setToDefaultAligned();
 		st.setPackingEnabled(true);
 
@@ -1956,7 +1999,9 @@ public class import_df_structures extends GhidraScript {
 		long mask = 1;
 		for (var f : t.fields) {
 			String name = null;
-			if (f.hasName)
+			if (f.originalName != null)
+				name = f.originalName;
+			else if (f.hasName)
 				name = t.getName() + "_" + f.name;
 			else if (f.hasAnonName)
 				name = t.getName() + "_" + f.anonName;
@@ -1992,7 +2037,7 @@ public class import_df_structures extends GhidraScript {
 			mask = mask << 1;
 		}
 
-		DataType bitFieldDT = createDataType(dtc, et);
+		DataType bitFieldDT = createDataType(dtcBitfields, et);
 		addDescriptionToDataType(bitFieldDT, t);
 
 		return bitFieldDT;
@@ -2275,9 +2320,9 @@ public class import_df_structures extends GhidraScript {
 			}
 		}
 
-		globalTableEntryType = (Structure) dtc.addDataType(globalTableEntryType,
+		globalTableEntryType = (Structure) dtcStructs.addDataType(globalTableEntryType,
 				DataTypeConflictHandler.REPLACE_HANDLER);
-		globalTableType = (Structure) dtc.addDataType(globalTableType, DataTypeConflictHandler.REPLACE_HANDLER);
+		globalTableType = (Structure) dtcStructs.addDataType(globalTableType, DataTypeConflictHandler.REPLACE_HANDLER);
 
 		var addr = start;
 		while (true) {
